@@ -1,0 +1,113 @@
+{
+  "neo4j": {
+    "uri": "bolt://localhost:7687",
+    "user": "neo4j",
+    "password": "uefo7_cCO4KdvrpS3knrhJ39Pwn2KDrFD0NCH4SKHv8",
+    "database": "neo4j"
+  },
+
+  "paths": {
+    "transcript_directory": "C:\\Users\\Admin\\Desktop\\Suresh\\Otter Transcripts",
+    "output_json": "C:\\Users\\Admin\\Desktop\\Suresh\\Otter Transcripts\\parsed_transcripts.json"
+  },
+
+  "parsing": {
+    "organizations": [
+      "Climate Hub",
+      "Outlier",
+      "Federation of American Scientists",
+      "FAS",
+      "CARB",
+      "California Air Resources Board",
+      "UNEP",
+      "UNEA",
+      "Chesapeake Climate Action Network",
+      "DSG",
+      "Degrees",
+      "Ocean Visions",
+      "TCCRI",
+      "Clear Path",
+      "ACCA",
+      "FAI",
+      "Bloomberg",
+      "Navigation Fund",
+      "Spitzer",
+      "QCF",
+      "Avaaz",
+      "Purpose",
+      "EDF",
+      "ARIA"
+    ],
+
+    "countries": [
+      "United States",
+      "USA",
+      "US",
+      "United Kingdom",
+      "UK",
+      "Kenya",
+      "Germany",
+      "India",
+      "China",
+      "Japan",
+      "Australia",
+      "California",
+      "Texas",
+      "Mexico",
+      "Canada",
+      "France",
+      "Switzerland",
+      "Singapore",
+      "Netherlands",
+      "Sweden",
+      "Norway",
+      "Denmark"
+    ],
+
+    "topics": {
+      "SRM": ["SRM", "solar radiation management", "geoengineering", "climate intervention", "stratospheric aerosol"],
+      "UNEA": ["UNEA", "UN Environment Assembly", "Nairobi", "UNEP", "multilateral"],
+      "First Mover Coalition": ["first mover", "coalition", "high ambition", "pioneer countries"],
+      "Recruitment": ["recruitment", "hiring", "candidate", "interview", "onboarding"],
+      "Funding": ["funding", "grant", "proposal", "budget", "funder", "fundraising"],
+      "CARB": ["CARB", "California Air Resources Board", "California research"],
+      "Texas Strategy": ["Texas", "Republican", "conservative", "TCCRI"],
+      "Republican Engagement": ["Republican", "GOP", "conservative", "right-wing", "bipartisan"],
+      "Media & Communications": ["op-ed", "media", "communications", "press", "journalist", "article"],
+      "Security & Privacy": ["security", "encryption", "privacy", "confidential", "FOIA"],
+      "International Strategy": ["international", "diplomacy", "country engagement", "foreign"],
+      "Field Building": ["field building", "network", "coalition", "partnership", "collaboration"],
+      "Research Funding": ["research funding", "science funding", "NOAA", "ERB"],
+      "Climate Week": ["climate week", "New York", "events", "conference"],
+      "Congressional Strategy": ["Congress", "Senate", "House", "Hill", "legislation", "appropriations"]
+    },
+
+    "meeting_categories": {
+      "All Hands": "All_Hands",
+      "Chris - Ben": "Leadership_Call",
+      "Outlier": "Funder_Call",
+      "HAC Team": "Team_Meeting",
+      "SRM Discussion": "Field_Coordination",
+      "Principals": "Principals_Call",
+      "US Team": "Team_Meeting",
+      "US Strategy": "Team_Meeting"
+    }
+  },
+
+  "extraction": {
+    "min_action_length": 10,
+    "max_action_length": 200,
+    "min_decision_length": 15,
+    "max_decision_length": 300,
+    "max_actions_per_meeting": 20,
+    "max_decisions_per_meeting": 15
+  },
+
+  "advanced": {
+    "use_llm_extraction": false,
+    "llm_model": "gpt-4",
+    "openai_api_key": "",
+    "enable_sentiment_analysis": false,
+    "estimate_durations": true
+  }
+}

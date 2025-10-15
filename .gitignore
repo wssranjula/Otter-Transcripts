@@ -1,0 +1,6 @@
+.venv
+venv
+.claude
+transcripts
+archive_old_system
+__pycache__

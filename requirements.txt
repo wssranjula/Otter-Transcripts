@@ -1,0 +1,40 @@
+# Neo4j Knowledge Graph Requirements
+
+# Core dependencies
+neo4j>=5.15.0
+python-dateutil>=2.8.2
+
+# LangChain + Mistral API (Production Setup)
+langchain>=0.1.0
+langchain-mistralai>=0.0.5
+langchain-core>=0.1.0
+pydantic>=2.5.0
+
+# Alternative: Ollama (Free & Local)
+# Install: https://ollama.ai/
+# Then run: ollama pull mistral
+# Uncomment below if using Ollama instead of API:
+# ollama>=0.1.0
+
+# Legacy Mistral API (without LangChain)
+# mistralai>=0.0.7
+
+# Alternative: llama-cpp-python (Local - requires GGUF model)
+# Requires: Download Mistral GGUF model from HuggingFace
+# llama-cpp-python>=0.2.0
+
+# Optional: Advanced NLP features
+# spacy>=3.7.0
+# transformers>=4.35.0
+
+# Optional: Alternative LLMs
+# openai>=1.0.0
+# anthropic>=0.7.0
+
+# Optional: Sentiment analysis
+# textblob>=0.17.1
+# vaderSentiment>=3.3.2
+
+# Development tools
+# pytest>=7.4.0
+# black>=23.12.0
