@@ -106,6 +106,7 @@ class RAGQueryHelper:
                        node.meeting_date as date,
                        node.speakers as speakers,
                        node.chunk_type as type,
+                       node.importance_score as importance,
                        score
                 ORDER BY score DESC
                 LIMIT $limit

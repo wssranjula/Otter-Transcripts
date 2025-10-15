@@ -4,3 +4,14 @@ venv
 transcripts
 archive_old_system
 __pycache__
+
+# Secrets and credentials
+.streamlit/secrets.toml
+.env
+*.env
+credentials.json
+config.json
+
+# API keys (be careful!)
+*_api_key.txt
+*_password.txt

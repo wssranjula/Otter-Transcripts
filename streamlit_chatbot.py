@@ -65,12 +65,23 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Configuration
-NEO4J_URI = "bolt://220210fe.databases.neo4j.io:7687"
-NEO4J_USER = "neo4j"
-NEO4J_PASSWORD = "uefo7_cCO4KdvrpS3knrhJ39Pwn2KDrFD0NCH4SKHv8"
-MISTRAL_API_KEY = "xELPoQf6Msav4CZ7fPEAfcKnJTa4UOxn"
-MODEL = "mistral-small-latest"
+# Configuration - Load from Streamlit secrets or environment variables
+import os
+
+try:
+    # Try to load from Streamlit secrets (for deployed app)
+    NEO4J_URI = st.secrets["neo4j"]["uri"]
+    NEO4J_USER = st.secrets["neo4j"]["user"]
+    NEO4J_PASSWORD = st.secrets["neo4j"]["password"]
+    MISTRAL_API_KEY = st.secrets["mistral"]["api_key"]
+    MODEL = st.secrets.get("mistral", {}).get("model", "mistral-small-latest")
+except (FileNotFoundError, KeyError):
+    # Fallback to environment variables (for local development)
+    NEO4J_URI = os.getenv("NEO4J_URI", "bolt://220210fe.databases.neo4j.io:7687")
+    NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
+    NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "uefo7_cCO4KdvrpS3knrhJ39Pwn2KDrFD0NCH4SKHv8")
+    MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY", "xELPoQf6Msav4CZ7fPEAfcKnJTa4UOxn")
+    MODEL = os.getenv("MISTRAL_MODEL", "mistral-small-latest")
 
 # Initialize session state
 if 'chatbot' not in st.session_state:
@@ -215,32 +226,52 @@ with col2:
         st.markdown(f"**Showing {len(st.session_state.last_chunks)} most relevant chunks:**")
 
         for idx, chunk in enumerate(st.session_state.last_chunks, 1):
-            with st.expander(f"**Chunk {idx}** - {chunk['meeting']} ({chunk['date']})", expanded=(idx <= 3)):
-                # Metadata
+            # Get chunk data with defaults for missing fields
+            meeting = chunk.get('meeting', 'Unknown Meeting')
+            date = chunk.get('date', 'Unknown Date')
+            chunk_type = chunk.get('type', 'discussion')
+            importance = chunk.get('importance', 0.0)
+            speakers = chunk.get('speakers', [])
+            text = chunk.get('text', 'No text available')
+            entities = chunk.get('entities', [])
+
+            with st.expander(f"**Chunk {idx}** - {meeting} ({date})", expanded=(idx <= 3)):
+                # Metadata row
                 col_a, col_b, col_c = st.columns(3)
                 with col_a:
-                    st.metric("Type", chunk['type'])
+                    st.metric("Type", chunk_type)
                 with col_b:
-                    st.metric("Importance", f"{chunk['importance']:.2f}")
+                    st.metric("Importance", f"{importance:.2f}")
                 with col_c:
-                    st.metric("Speakers", len(chunk['speakers']))
+                    st.metric("Speakers", len(speakers) if speakers else 0)
 
-                # Speakers
-                st.markdown(f"**👥 Speakers:** {', '.join(chunk['speakers'])}")
+                st.markdown("---")
 
-                # Text
+                # Speakers list
+                if speakers:
+                    st.markdown(f"**👥 Speakers:** {', '.join(speakers)}")
+                else:
+                    st.markdown("**👥 Speakers:** None listed")
+
+                # Main content - ALWAYS show, even if empty
                 st.markdown("**📝 Content:**")
-                st.text_area(
-                    "Chunk text",
-                    value=chunk['text'],
-                    height=150,
-                    key=f"chunk_{idx}",
-                    label_visibility="collapsed"
-                )
+                if text and text != 'No text available':
+                    st.markdown(f"```\n{text}\n```")
+                else:
+                    st.warning("⚠️ No text content found in this chunk")
+
+                st.markdown("---")
 
                 # Entities mentioned
-                if chunk.get('entities'):
-                    st.markdown(f"**🏷️ Entities:** {', '.join(chunk['entities'][:10])}")
+                if entities:
+                    st.markdown(f"**🏷️ Entities Mentioned:** {', '.join(entities[:10])}")
+                else:
+                    st.markdown("**🏷️ Entities Mentioned:** None")
+
+                # Debug info (expandable)
+                with st.expander("🔍 Debug: Show raw chunk data"):
+                    st.write("**All fields in this chunk:**")
+                    st.json(chunk)
 
     elif show_chunks:
         st.info("👆 Ask a question to see retrieved context chunks!")
