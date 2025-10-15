@@ -16,7 +16,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for better styling
+# Custom CSS for better styling (works with both light and dark themes)
 st.markdown("""
 <style>
     .main-header {
@@ -27,7 +27,7 @@ st.markdown("""
         margin-bottom: 1rem;
     }
     .chunk-card {
-        background-color: #f0f2f6;
+        background-color: rgba(240, 242, 246, 0.1);
         padding: 1rem;
         border-radius: 0.5rem;
         margin-bottom: 0.5rem;
@@ -40,27 +40,29 @@ st.markdown("""
     }
     .chunk-meta {
         font-size: 0.85rem;
-        color: #666;
+        color: inherit;
+        opacity: 0.8;
         margin-bottom: 0.5rem;
     }
     .chunk-text {
         font-size: 0.95rem;
         line-height: 1.5;
-        color: #333;
+        color: inherit;
     }
     .stats-box {
-        background-color: #e8f4f8;
+        background-color: rgba(232, 244, 248, 0.1);
         padding: 1rem;
         border-radius: 0.5rem;
         text-align: center;
     }
     .answer-box {
-        background-color: #f9f9f9;
+        background-color: rgba(82, 196, 26, 0.1);
         padding: 1.5rem;
         border-radius: 0.5rem;
         border-left: 4px solid #52c41a;
         margin-top: 1rem;
         margin-bottom: 1rem;
+        color: inherit;
     }
 </style>
 """, unsafe_allow_html=True)
