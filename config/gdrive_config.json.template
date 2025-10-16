@@ -1,0 +1,26 @@
+{
+  "google_drive": {
+    "credentials_file": "config/credentials.json",
+    "token_file": "config/token.pickle",
+    "state_file": "config/gdrive_state.json",
+    "folder_name": "RAG Documents",
+    "folder_id": null,
+    "monitor_interval_seconds": 60
+  },
+  "rag": {
+    "temp_transcript_dir": "gdrive_transcripts",
+    "output_json": "knowledge_graph_gdrive.json",
+    "mistral_api_key": "YOUR_MISTRAL_API_KEY_HERE",
+    "model": "mistral-large-latest"
+  },
+  "neo4j": {
+    "uri": "bolt://your-neo4j-instance:7687",
+    "user": "neo4j",
+    "password": "YOUR_NEO4J_PASSWORD_HERE"
+  },
+  "processing": {
+    "auto_load_to_neo4j": true,
+    "clear_temp_files": false,
+    "batch_processing": false
+  }
+}

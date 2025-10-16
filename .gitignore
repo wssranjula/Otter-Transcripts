@@ -9,9 +9,39 @@ __pycache__
 .streamlit/secrets.toml
 .env
 *.env
-credentials.json
-config.json
 
-# API keys (be careful!)
+# Google Drive OAuth
+credentials.json
+token.pickle
+config/credentials.json
+config/token.pickle
+
+# Configuration files with secrets
+config.json
+config/config.json
+config/gdrive_config.json
+gdrive_config.json
+
+# State files
+config/gdrive_state.json
+gdrive_state.json
+
+# API keys
 *_api_key.txt
 *_password.txt
+
+# Generated data
+config/knowledge_graph*.json
+knowledge_graph*.json
+
+# Temporary files
+gdrive_transcripts/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
