@@ -3,7 +3,7 @@ RAG-Powered Chatbot using Mistral AI
 Answers questions using the Neo4j knowledge base
 """
 
-from rag_queries import RAGQueryHelper
+from src.core.rag_queries import RAGQueryHelper
 from langchain_mistralai import ChatMistralAI
 from langchain_core.messages import HumanMessage, SystemMessage
 import sys

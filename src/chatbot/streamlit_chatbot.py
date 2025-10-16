@@ -4,7 +4,7 @@ Shows retrieved chunks and provides interactive chat experience
 """
 
 import streamlit as st
-from chatbot import RAGChatbot
+from src.chatbot.chatbot import RAGChatbot
 from datetime import datetime
 import json
 

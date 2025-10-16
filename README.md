@@ -1,456 +1,299 @@
-# RAG-Optimized Knowledge Graph System
+# RAG Knowledge Graph System
 
-Transform your meeting transcripts into a queryable Neo4j knowledge graph optimized for AI agents.
+A comprehensive Retrieval-Augmented Generation (RAG) system that processes transcripts and documents, builds a knowledge graph in Neo4j, and provides intelligent querying capabilities with Google Drive integration.
 
----
-
-## 🚀 Quick Start (5 minutes)
-
-### 1. Install Dependencies
-```bash
-pip install -r requirements.txt
-```
-
-### 2. Start Neo4j
-- **Neo4j Desktop:** Download from https://neo4j.com/download/
-- **Docker:** `docker run -p 7474:7474 -p 7687:7687 -e NEO4J_AUTH=neo4j/password neo4j:latest`
-
-### 3. Configure API Keys
-
-Edit `parse_for_rag.py` (line 360):
-```python
-MISTRAL_API_KEY = 'your_mistral_api_key'
-```
-
-Edit `load_to_neo4j_rag.py` (line 293):
-```python
-NEO4J_PASSWORD = "your_neo4j_password"
-```
-
-### 4. Run the Pipeline
-```bash
-# Complete pipeline: Parse → Load → Query
-python run_rag_pipeline.py
-
-# Interactive query mode
-python run_rag_pipeline.py query
-```
-
-### 5. Query Your Knowledge Graph
-
-**From Python:**
-```python
-from rag_queries import RAGQueryHelper
-
-rag = RAGQueryHelper("bolt://localhost:7687", "neo4j", "password")
-
-# Find chunks about Germany
-chunks = rag.find_chunks_about_entity("Germany", limit=5)
-
-# Build context for AI agent
-context = rag.build_rag_context(
-    query="Why did we deprioritize Germany?",
-    entity_names=["Germany"],
-    limit=5
-)
-
-# Send to your AI agent
-response = your_ai_agent(context)
-```
-
-**From Neo4j Browser (http://localhost:7474):**
-```cypher
-// Find conversation about Germany
-MATCH (e:Entity {name: 'Germany'})<-[:MENTIONS]-(c:Chunk)
-RETURN c.text, c.speakers, c.meeting_date
-ORDER BY c.importance_score DESC
-LIMIT 5
-```
-
----
-
-## 📁 File Structure
+## 📁 Project Structure
 
 ```
 Otter Transcripts/
+├── src/
+│   ├── core/                    # Core RAG pipeline
+│   │   ├── chunking_logic.py           # Intelligent text chunking
+│   │   ├── langchain_extractor_simple.py # Entity extraction with Mistral
+│   │   ├── parse_for_rag.py            # RAG-optimized transcript parser
+│   │   ├── load_to_neo4j_rag.py        # Neo4j data loader
+│   │   ├── rag_queries.py              # RAG query helpers
+│   │   └── run_rag_pipeline.py         # Main pipeline orchestrator
+│   │
+│   ├── gdrive/                  # Google Drive integration
+│   │   ├── document_parser.py          # Parse DOCX/PDF/Excel files
+│   │   ├── google_drive_monitor.py     # Monitor Google Drive folders
+│   │   └── gdrive_rag_pipeline.py      # Google Drive to RAG pipeline
+│   │
+│   └── chatbot/                 # Chatbot interfaces
+│       ├── chatbot.py                  # CLI chatbot
+│       ├── streamlit_chatbot.py        # Web UI chatbot
+│       ├── analyze_retrieval.py        # Retrieval quality analyzer
+│       └── rq2.py                      # Query experiments
 │
-├── 🔧 Core System (Required)
-│   ├── parse_for_rag.py                # Main parser with chunking + LLM extraction
-│   ├── chunking_logic.py               # Intelligent conversation chunking
-│   ├── langchain_extractor_simple.py   # Mistral LLM entity extraction
-│   ├── load_to_neo4j_rag.py            # Neo4j loader with RAG schema
-│   ├── rag_queries.py                  # Query API for AI agents
-│   └── run_rag_pipeline.py             # Complete pipeline runner
+├── config/                      # Configuration files
+│   ├── config.json                     # Main RAG config
+│   ├── gdrive_config.json              # Google Drive config
+│   ├── credentials.json                # Google OAuth credentials
+│   ├── token.pickle                    # Google auth token
+│   └── gdrive_state.json               # Processed files tracker
 │
-├── 📚 Documentation
-│   ├── README.md                       # This file - Quick start
-│   ├── QUICKSTART_RAG.md               # Detailed setup guide
-│   ├── RAG_SYSTEM_README.md            # Complete documentation
-│   ├── SCHEMA_FOR_RAG.md               # Schema design details
-│   └── INDEX.md                        # Complete file index
+├── docs/                        # Documentation
+│   ├── INDEX.md                        # Documentation index
+│   ├── QUICKSTART_RAG.md               # Quick start guide
+│   ├── GDRIVE_SETUP_GUIDE.md           # Google Drive setup
+│   ├── RAG_SYSTEM_README.md            # System architecture
+│   ├── SCHEMA_FOR_RAG.md               # Neo4j schema
+│   ├── CHATBOT_README.md               # Chatbot documentation
+│   ├── STREAMLIT_CHATBOT_README.md     # Streamlit chatbot guide
+│   ├── DEPLOYMENT_GUIDE.md             # Deployment instructions
+│   └── ... (other guides)
 │
-├── ⚙️ Configuration
-│   ├── config.json                     # Optional configuration
-│   └── requirements.txt                # Python dependencies
+├── data/                        # Data directories
+│   ├── transcripts/                    # Original transcript files
+│   └── output/                         # Generated outputs
 │
-├── 📦 Archive (Old System)
-│   └── archive_old_system/             # Previous metadata-focused system
+├── tests/                       # Test scripts
+│   ├── test_neo4j_connection.py
+│   ├── test_transcript_discovery.py
+│   ├── test_chatbot.py
+│   └── check_dates.py
 │
-└── 📁 transcripts/                     # Your transcript files go here
-    └── #1 - All Hands Calls/
-        ├── All Hands Call - May 28.txt
-        └── All Hands Call - Jun 11.txt
+├── scripts/                     # Utility scripts
+│   ├── install_streamlit.bat
+│   └── run_streamlit.bat
+│
+├── run_gdrive.py               # 🚀 Google Drive launcher
+├── run_chatbot.py              # 🚀 Chatbot launcher
+├── requirements.txt            # Core dependencies
+├── requirements_gdrive.txt     # Google Drive dependencies
+├── requirements_streamlit.txt  # Streamlit dependencies
+└── README.md                   # This file
 ```
 
----
+## 🚀 Quick Start
 
-## 🎯 What This System Does
+### 1. Installation
 
-### Extracts & Stores
-- ✅ **Conversation chunks** (300-1500 chars of actual conversation)
-- ✅ **People, Organizations, Countries, Topics** (extracted by Mistral LLM)
-- ✅ **Decisions** (with rationale and source conversation)
-- ✅ **Actions** (with owner and source conversation)
-- ✅ **Conversation flow** (NEXT_CHUNK relationships)
-- ✅ **Entity mentions** (which chunks discuss which entities)
+```bash
+# Clone repository
+cd "Otter Transcripts"
 
-### Enables AI Agents To
-- 🤖 Answer questions with supporting evidence
-- 🤖 Explain "why" decisions were made with exact quotes
-- 🤖 Track topic evolution over time
-- 🤖 Find who said what when
-- 🤖 Retrieve conversation context for any query
+# Create virtual environment
+python -m venv venv
 
----
+# Activate venv
+venv\Scripts\activate  # Windows
+# source venv/bin/activate  # Linux/Mac
 
-## 💡 Key Features
-
-### 1. Intelligent Chunking
-Splits transcripts into optimal retrieval units (300-1500 chars):
-- Detects topic changes automatically
-- Classifies chunks: decision, action, assessment, question, discussion
-- Calculates importance scores
-
-### 2. LLM Entity Extraction
-Uses Mistral API to extract:
-- People (name, role, organization)
-- Organizations (name, type)
-- Countries (name, status)
-- Topics (strategic themes)
-- Decisions (description, rationale)
-- Actions (task, owner)
-
-### 3. RAG-Optimized Schema
-- **Chunk nodes** = Actual conversation text (PRIMARY)
-- **Entity nodes** = Unified entity storage
-- **MENTIONS** = Links chunks to entities discussed
-- **NEXT_CHUNK** = Conversation flow for context expansion
-- **RESULTED_IN** = Links decisions/actions to source conversation
-
-### 4. Query API
-10+ functions for AI agents:
-- `find_chunks_about_entity()` - Basic search
-- `get_chunk_with_context()` - Context expansion
-- `find_decision_reasoning()` - Decision traceability
-- `get_topic_evolution()` - Temporal tracking
-- **`build_rag_context()`** - One function to build AI context
-
----
-
-## 🔌 Integration Examples
-
-### OpenAI
-```python
-import openai
-from rag_queries import RAGQueryHelper
-
-rag = RAGQueryHelper("bolt://localhost:7687", "neo4j", "password")
-
-def answer_question(question):
-    context = rag.build_rag_context(question, limit=5)
-
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[
-            {"role": "system", "content": "Answer based on context."},
-            {"role": "user", "content": context}
-        ]
-    )
-
-    return response.choices[0].message.content
-
-answer = answer_question("Why did we deprioritize Germany?")
-print(answer)
+# Install dependencies
+pip install -r requirements.txt
+pip install -r requirements_gdrive.txt
+pip install -r requirements_streamlit.txt
 ```
 
-### Mistral
-```python
-from langchain_mistralai import ChatMistralAI
-from rag_queries import RAGQueryHelper
+### 2. Core RAG Pipeline (Transcripts)
 
-rag = RAGQueryHelper("bolt://localhost:7687", "neo4j", "password")
-llm = ChatMistralAI(mistral_api_key="key", model="mistral-large-latest")
+Process transcript files and build knowledge graph:
 
-def answer_question(question):
-    context = rag.build_rag_context(question, limit=5)
-    response = llm.invoke(context)
-    return response.content
+```bash
+python src/core/run_rag_pipeline.py
 ```
 
----
+This will:
+- Parse all transcripts in `data/transcripts/`
+- Extract entities and create chunks
+- Load everything to Neo4j
+- Run demo RAG queries
+
+### 3. Google Drive Integration
+
+Automatically process documents from Google Drive:
+
+```bash
+# Setup (first time only)
+python run_gdrive.py setup
+
+# Process all existing files
+python run_gdrive.py batch
+
+# Monitor for new files
+python run_gdrive.py monitor
+```
+
+**Supported formats**: DOCX, PDF, Excel (XLSX/XLS)
+
+See `docs/GDRIVE_SETUP_GUIDE.md` for detailed setup instructions.
+
+### 4. Chatbot Interface
+
+Launch the web-based chatbot:
+
+```bash
+python run_chatbot.py
+```
+
+Or use the CLI version:
+
+```bash
+python src/chatbot/chatbot.py
+```
+
+## 📚 Key Features
+
+### Core RAG Pipeline
+- **Intelligent Chunking**: Context-aware text segmentation
+- **Entity Extraction**: Extract people, organizations, topics using Mistral LLM
+- **Knowledge Graph**: Store relationships in Neo4j
+- **RAG Queries**: Semantic search with context expansion
+
+### Google Drive Integration
+- **Auto-Processing**: Monitor folders for new documents
+- **Multiple Formats**: DOCX, PDF, Excel support
+- **Seamless Integration**: Automatically adds to knowledge graph
+- **State Tracking**: Never reprocess the same file
+
+### Chatbot
+- **Web UI**: Beautiful Streamlit interface
+- **CLI**: Terminal-based chatbot
+- **Context-Aware**: Uses Neo4j for intelligent responses
+- **Conversation History**: Maintains context across queries
+
+## 🔧 Configuration
+
+### Core RAG (`config/config.json`)
+```json
+{
+  "mistral_api_key": "your-key",
+  "neo4j_uri": "bolt://...",
+  "neo4j_user": "neo4j",
+  "neo4j_password": "your-password"
+}
+```
+
+### Google Drive (`config/gdrive_config.json`)
+```json
+{
+  "google_drive": {
+    "folder_name": "RAG Documents",
+    "monitor_interval_seconds": 60
+  },
+  "processing": {
+    "auto_load_to_neo4j": true
+  }
+}
+```
 
 ## 📖 Documentation
 
-| File | Description | Read Time |
-|------|-------------|-----------|
-| **README.md** | This file - Quick overview | 5 min |
-| **QUICKSTART_RAG.md** | Step-by-step setup guide | 10 min |
-| **RAG_SYSTEM_README.md** | Complete system documentation | 30 min |
-| **SCHEMA_FOR_RAG.md** | Schema design philosophy | 20 min |
-| **INDEX.md** | Complete file index | 5 min |
+| Document | Description |
+|----------|-------------|
+| **[INDEX.md](docs/INDEX.md)** | Complete documentation index |
+| **[QUICKSTART_RAG.md](docs/QUICKSTART_RAG.md)** | Get started quickly |
+| **[GDRIVE_SETUP_GUIDE.md](docs/GDRIVE_SETUP_GUIDE.md)** | Google Drive integration setup |
+| **[RAG_SYSTEM_README.md](docs/RAG_SYSTEM_README.md)** | System architecture |
+| **[SCHEMA_FOR_RAG.md](docs/SCHEMA_FOR_RAG.md)** | Neo4j graph schema |
+| **[CHATBOT_README.md](docs/CHATBOT_README.md)** | Chatbot usage guide |
+| **[DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md)** | Production deployment |
 
-**Recommendation:** Start with QUICKSTART_RAG.md for detailed setup instructions.
+## 🛠️ Common Tasks
 
----
-
-## 🛠️ Common Workflows
-
-### Parse New Transcripts
+### Process New Transcripts
 ```bash
-python parse_for_rag.py
+# Add files to data/transcripts/
+python src/core/run_rag_pipeline.py
 ```
 
-### Load into Neo4j
+### Process Google Drive Documents
 ```bash
-python load_to_neo4j_rag.py
+# One-time batch
+python run_gdrive.py batch
+
+# Continuous monitoring
+python run_gdrive.py monitor
 ```
 
-### Query Interactively
+### Query the Knowledge Graph
 ```bash
-python run_rag_pipeline.py query
+# Interactive mode
+python src/core/run_rag_pipeline.py query
+
+# Chatbot
+python run_chatbot.py
 ```
 
-### Query from Code
-```python
-from rag_queries import RAGQueryHelper
-
-rag = RAGQueryHelper("bolt://localhost:7687", "neo4j", "password")
-
-# Find decision reasoning
-decisions = rag.find_decision_reasoning("Germany")
-for d in decisions:
-    print(f"Decision: {d['decision']}")
-    for chunk in d['reasoning_chunks']:
-        print(f"  Evidence: {chunk['text'][:200]}...")
-
-# Track topic evolution
-evolution = rag.get_topic_evolution("Germany", chunk_types=['assessment', 'decision'])
-for chunk in evolution:
-    print(f"{chunk['date']}: {chunk['text'][:150]}...")
-
-# Build context for AI
-context = rag.build_rag_context(
-    query="What is our Germany strategy?",
-    entity_names=["Germany"],
-    limit=5
-)
+### Run Tests
+```bash
+python tests/test_neo4j_connection.py
+python tests/test_transcript_discovery.py
 ```
 
----
+## 🌐 Neo4j Browser
 
-## 🔧 Troubleshooting
+Access Neo4j Browser at: `http://localhost:7474`
 
-### Connection Refused
-**Problem:** Can't connect to Neo4j
+Example queries:
+```cypher
+// View all entities
+MATCH (e:Entity) RETURN e LIMIT 25
 
-**Solution:**
-1. Verify Neo4j is running: http://localhost:7474
-2. Check port 7687 is not blocked
-3. Verify password in `load_to_neo4j_rag.py`
+// Find chunks about a topic
+MATCH (e:Entity {name: "Germany"})<-[:MENTIONS]-(c:Chunk)
+RETURN c LIMIT 10
 
-### Mistral API Errors
-**Problem:** LLM extraction fails
-
-**Solution:**
-1. Verify API key in `parse_for_rag.py`
-2. Check credits at https://console.mistral.ai/
-3. Try smaller model: `mistral-small-latest`
-
-### No Transcripts Found
-**Problem:** Parser finds no files
-
-**Solution:**
-1. Check path in `parse_for_rag.py` (line 358) - should point to `transcripts/` folder
-2. Verify .txt files exist in the `transcripts/` folder
-3. Check files don't start with 'parsed_', 'README', etc.
-4. Ensure transcripts are in `transcripts/` folder, not root directory
-
----
-
-## 📊 Performance
-
-### For 20 Transcripts
-- **Parse time:** ~5 minutes (includes LLM calls)
-- **Load time:** ~3 seconds
-- **Database size:** ~5 MB
-- **Query time:** <100ms
-
-### Scalability
-- Easily handles 100s of transcripts
-- <200ms to build AI context
-- Optimized indexes for fast retrieval
-
----
-
-## 🎓 Example Query Results
-
-### Question: "Why did we deprioritize Germany?"
-
-**System returns:**
-```
-Context from Knowledge Base:
-
-[Context 1 - Question]
-Ben Margetts: We need to finalize our first mover countries. Tom,
-what's your assessment of Germany?
-
-[Context 2 - Assessment]
-Tom Pravda: Germany is too risky right now. They're too porous with
-anti-SRM NGOs like Heinrich Böll Foundation. If we engage now, there's
-a high likelihood of leaks. I recommend we wait until the field is more
-mature. Sue Biniaz agrees with this assessment.
-
-[Context 3 - Decision]
-Ben Margetts: Makes sense. Let's deprioritize Germany and focus on UK
-and Kenya instead.
-
-[Decision]
-Description: Deprioritize Germany for first mover coalition
-Rationale: Too porous with anti-SRM NGOs, high risk of confidentiality breach
+// View meeting structure
+MATCH (m:Meeting)-[:HAS_CHUNK]->(c:Chunk)
+RETURN m, c LIMIT 50
 ```
 
-**AI can now answer with:**
-- Exact quotes from Tom Pravda
-- Sue Biniaz's agreement
-- Alternative strategy (UK and Kenya)
-- Full reasoning chain
+## 🔍 Troubleshooting
 
----
+### Google Drive Not Working
+1. Check `config/credentials.json` exists
+2. Run `python run_gdrive.py setup` again
+3. Verify folder name in `config/gdrive_config.json`
 
-## 🏗️ System Architecture
+### Neo4j Connection Issues
+1. Ensure Neo4j is running
+2. Check credentials in `config/config.json`
+3. Test: `python tests/test_neo4j_connection.py`
 
-```
-Transcripts (.txt files)
-    ↓
-parse_for_rag.py
-  ├─ chunking_logic.py (smart chunking)
-  └─ langchain_extractor_simple.py (Mistral LLM)
-    ↓
-knowledge_graph_rag.json
-    ↓
-load_to_neo4j_rag.py
-    ↓
-Neo4j Knowledge Graph
-  ├─ Chunk nodes (conversation text)
-  ├─ Entity nodes (people, orgs, countries, topics)
-  ├─ MENTIONS relationships
-  ├─ NEXT_CHUNK relationships
-  └─ RESULTED_IN relationships
-    ↓
-rag_queries.py (Query API)
-    ↓
-Your AI Agent
+### Import Errors
+```bash
+# Make sure you're in the project root
+cd "C:\Users\Admin\Desktop\Suresh\Otter Transcripts"
+
+# Activate venv
+venv\Scripts\activate
+
+# Reinstall dependencies
+pip install -r requirements.txt -r requirements_gdrive.txt
 ```
 
----
+## 📊 System Requirements
 
-## ⚙️ Configuration Options
+- Python 3.8+
+- Neo4j 4.0+ (or Neo4j Aura)
+- 4GB RAM minimum
+- Internet connection (for Mistral API)
 
-### Chunk Sizes
-Edit `chunking_logic.py`:
-```python
-chunker = TranscriptChunker(
-    min_chunk_size=300,   # Minimum chunk size
-    max_chunk_size=1500   # Maximum chunk size
-)
-```
+## 🤝 Contributing
 
-### API Settings
-Edit `parse_for_rag.py`:
-```python
-MISTRAL_API_KEY = 'your_key'
-MODEL = "mistral-large-latest"  # or "mistral-small-latest"
-```
+The project is organized into modular components:
 
-### Neo4j Connection
-Edit `load_to_neo4j_rag.py`:
-```python
-NEO4J_URI = "bolt://localhost:7687"
-NEO4J_USER = "neo4j"
-NEO4J_PASSWORD = "your_password"
-```
-
-Or use `config.json` for centralized configuration.
-
----
-
-## 📦 What's in the Archive?
-
-The `archive_old_system/` folder contains the previous metadata-focused system:
-- Pattern-based entity extraction
-- Separate node types for each entity
-- No conversation text storage
-- Good for basic metadata queries
-
-**When to use archived system:**
-- You only need metadata (who attended, what decided)
-- You don't need actual conversation retrieval
-- You don't need AI agent integration
-
-**When to use current RAG system:**
-- You need AI agents to answer questions
-- You need actual conversation with evidence
-- You want to explain "why" with quotes
-- You want to track topic evolution
-
----
-
-## 🚀 Next Steps
-
-1. ✅ **Setup:** Follow QUICKSTART_RAG.md
-2. ✅ **Run:** `python run_rag_pipeline.py`
-3. ✅ **Explore:** Try queries in Neo4j Browser
-4. ✅ **Integrate:** Use `build_rag_context()` with your AI agent
-5. ✅ **Customize:** Modify chunking, extraction as needed
-
----
-
-## 📚 Resources
-
-- **Neo4j Browser:** http://localhost:7474
-- **Mistral Console:** https://console.mistral.ai/
-- **Neo4j Docs:** https://neo4j.com/docs/
-- **LangChain Docs:** https://python.langchain.com/
-
----
-
-## 🤝 Support
-
-For issues:
-1. Check QUICKSTART_RAG.md troubleshooting section
-2. Review RAG_SYSTEM_README.md for details
-3. Examine code files for configuration options
-
----
+- **Core RAG**: Modify `src/core/` for pipeline changes
+- **Google Drive**: Edit `src/gdrive/` for document processing
+- **Chatbot**: Update `src/chatbot/` for UI changes
+- **Tests**: Add tests in `tests/`
+- **Docs**: Update documentation in `docs/`
 
 ## 📝 License
 
-MIT License - Feel free to use and modify for your needs.
+This project is for internal use.
 
-**Created:** January 2025
-**Optimized for:** AI agents, RAG applications, conversation retrieval
-**Built with:** Neo4j, Python, LangChain, Mistral API
+## 🆘 Support
+
+For issues or questions:
+1. Check documentation in `docs/`
+2. Run relevant test scripts in `tests/`
+3. Review logs for detailed error messages
 
 ---
 
-**Your RAG-optimized knowledge graph is ready to power your AI agents! 🚀**
+**Last Updated**: October 2025
+**Version**: 2.0 (Reorganized Structure)

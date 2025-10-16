@@ -1,0 +1,15 @@
+# Google Drive Integration - Security Files
+# Add these lines to your .gitignore
+
+# Google OAuth credentials and tokens
+credentials.json
+token.pickle
+
+# Processing state
+gdrive_state.json
+
+# Temporary transcript files
+gdrive_transcripts/
+
+# Generated knowledge graphs
+knowledge_graph_gdrive.json

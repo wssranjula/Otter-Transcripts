@@ -1,0 +1,19 @@
+# Google Drive Integration Requirements
+
+# Google Drive API
+google-auth==2.23.4
+google-auth-oauthlib==1.1.0
+google-auth-httplib2==0.1.1
+google-api-python-client==2.108.0
+
+# Document Parsing
+python-docx==1.1.0
+PyPDF2==3.0.1
+pandas==2.1.4
+openpyxl==3.1.2
+
+# Existing requirements (from your RAG pipeline)
+# Add these if not already installed:
+# mistralai
+# neo4j
+# langchain

@@ -9,8 +9,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
 
-from chunking_logic import TranscriptChunker
-from langchain_extractor_simple import SimplifiedMistralExtractor
+from src.core.chunking_logic import TranscriptChunker
+from src.core.langchain_extractor_simple import SimplifiedMistralExtractor
 
 
 class RAGTranscriptParser:

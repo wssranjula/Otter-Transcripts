@@ -5,9 +5,9 @@ Demonstrates: Parse → Load → Query workflow
 
 import sys
 from pathlib import Path
-from parse_for_rag import RAGTranscriptParser
-from load_to_neo4j_rag import RAGNeo4jLoader
-from rag_queries import RAGQueryHelper
+from src.core.parse_for_rag import RAGTranscriptParser
+from src.core.load_to_neo4j_rag import RAGNeo4jLoader
+from src.core.rag_queries import RAGQueryHelper
 
 
 def run_complete_pipeline():
