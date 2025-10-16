@@ -87,13 +87,24 @@ class GoogleDriveMonitor:
                 flow = InstalledAppFlow.from_client_secrets_file(
                     self.credentials_file, self.SCOPES)
 
-                # Try local server first, fall back to console if no browser
+                # Try local server first, fall back to manual flow if no browser
                 try:
                     creds = flow.run_local_server(port=0)
                 except Exception as e:
                     print("\n[INFO] Cannot open browser (running on server)")
-                    print("[INFO] Using manual authentication flow...\n")
-                    creds = flow.run_console()
+                    print("[INFO] Using manual authentication flow...")
+                    print("\nPlease visit this URL to authorize:\n")
+
+                    # Get authorization URL
+                    flow.redirect_uri = 'urn:ietf:wg:oauth:2.0:oob'
+                    auth_url, _ = flow.authorization_url(prompt='consent')
+                    print(auth_url)
+                    print("\n")
+
+                    # Get authorization code from user
+                    code = input("Enter the authorization code: ")
+                    flow.fetch_token(code=code)
+                    creds = flow.credentials
 
             # Save credentials
             with open(self.token_file, 'wb') as token:
