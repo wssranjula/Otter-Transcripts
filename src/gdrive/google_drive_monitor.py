@@ -86,7 +86,14 @@ class GoogleDriveMonitor:
                 print("Starting OAuth authentication flow...")
                 flow = InstalledAppFlow.from_client_secrets_file(
                     self.credentials_file, self.SCOPES)
-                creds = flow.run_local_server(port=0)
+
+                # Try local server first, fall back to console if no browser
+                try:
+                    creds = flow.run_local_server(port=0)
+                except Exception as e:
+                    print("\n[INFO] Cannot open browser (running on server)")
+                    print("[INFO] Using manual authentication flow...\n")
+                    creds = flow.run_console()
 
             # Save credentials
             with open(self.token_file, 'wb') as token:
