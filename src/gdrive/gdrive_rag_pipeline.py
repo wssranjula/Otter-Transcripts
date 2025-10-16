@@ -14,6 +14,8 @@ from src.gdrive.document_parser import DocumentParser
 from src.gdrive.google_drive_monitor import GoogleDriveMonitor
 from src.core.parse_for_rag import RAGTranscriptParser
 from src.core.load_to_neo4j_rag import RAGNeo4jLoader
+from src.core.load_to_neo4j_unified import UnifiedRAGNeo4jLoader
+from src.whatsapp.whatsapp_parser import WhatsAppParser
 
 
 class GoogleDriveRAGPipeline:
@@ -43,7 +45,13 @@ class GoogleDriveRAGPipeline:
             model=self.config['rag']['model']
         )
 
+        # WhatsApp parser
+        self.whatsapp_parser = WhatsAppParser(
+            mistral_api_key=self.config['rag']['mistral_api_key']
+        )
+
         self.neo4j_loader = None  # Initialize when needed
+        self.unified_loader = None  # For WhatsApp/multi-source support
 
     def _load_config(self, config_file: str) -> Dict:
         """Load configuration from JSON file"""
@@ -128,9 +136,26 @@ class GoogleDriveRAGPipeline:
 
         return True
 
+    def _is_whatsapp_export(self, file_name: str, file_content: bytes) -> bool:
+        """Detect if file is a WhatsApp export"""
+        # Check filename
+        file_name_lower = file_name.lower()
+        if 'whatsapp' in file_name_lower or 'chat' in file_name_lower:
+            # Check content for WhatsApp format
+            try:
+                text = file_content.decode('utf-8', errors='ignore')
+                # Look for WhatsApp timestamp pattern
+                import re
+                pattern = r'\d{1,2}/\d{1,2}/\d{4},\s\d{1,2}:\d{2}\s-\s'
+                return bool(re.search(pattern, text[:1000]))
+            except:
+                return False
+        return False
+
     def process_document(self, file_metadata: Dict, file_content: bytes) -> bool:
         """
         Process a single document through the RAG pipeline
+        Automatically detects and routes WhatsApp exports
 
         Args:
             file_metadata: Google Drive file metadata
@@ -145,6 +170,11 @@ class GoogleDriveRAGPipeline:
         print(f"[LOG] File size: {len(file_content)} bytes")
         print(f"[LOG] File type: {file_metadata.get('mimeType', 'unknown')}")
         print(f"[LOG] Created: {file_metadata.get('createdTime', 'unknown')}")
+
+        # Detect WhatsApp export
+        if self._is_whatsapp_export(file_metadata['name'], file_content):
+            print(f"[INFO] Detected WhatsApp chat export")
+            return self._process_whatsapp_chat(file_metadata, file_content)
 
         # Step 1: Parse document to text
         print("\n[STEP 1/5] Parsing document...")
@@ -260,8 +290,87 @@ class GoogleDriveRAGPipeline:
         print("="*70)
         return True
 
+    def _process_whatsapp_chat(self, file_metadata: Dict, file_content: bytes) -> bool:
+        """
+        Process WhatsApp chat export
+
+        Args:
+            file_metadata: Google Drive file metadata
+            file_content: File content as bytes
+
+        Returns:
+            True if successful, False if any step failed
+        """
+        print("\n[STEP 1/3] Parsing WhatsApp chat...")
+        try:
+            # Save to temp file (WhatsApp parser expects file path)
+            temp_dir = Path(self.config['rag']['temp_transcript_dir'])
+            temp_dir.mkdir(parents=True, exist_ok=True)
+
+            temp_file = temp_dir / file_metadata['name']
+            with open(temp_file, 'wb') as f:
+                f.write(file_content)
+
+            print(f"  [LOG] Saved to: {temp_file}")
+
+            # Parse WhatsApp export
+            print(f"  [LOG] Parsing WhatsApp export...")
+            chat_data = self.whatsapp_parser.parse_chat_file(str(temp_file))
+
+            if not chat_data:
+                print(f"  [ERROR] Failed to parse WhatsApp export")
+                return False
+
+            print(f"  [OK] Parsed WhatsApp chat:")
+            print(f"    - Messages: {len(chat_data['messages'])}")
+            print(f"    - Chunks: {len(chat_data['chunks'])}")
+            print(f"    - Participants: {len(chat_data['participants'])}")
+            print(f"    - Entities: {len(chat_data['entities'])}")
+
+        except Exception as e:
+            print(f"  [ERROR] Failed to parse WhatsApp export: {e}")
+            import traceback
+            print(f"  [ERROR] Traceback:\n{traceback.format_exc()}")
+            return False
+
+        # Step 2: Load to Neo4j (if enabled)
+        if self.config['processing']['auto_load_to_neo4j']:
+            print("\n[STEP 2/3] Loading to Neo4j...")
+            try:
+                print(f"  [LOG] Ensuring unified Neo4j connection...")
+                self._ensure_unified_neo4j_connection()
+
+                # Load WhatsApp data
+                print(f"  [LOG] Loading WhatsApp chat to Neo4j...")
+                self.unified_loader.load_whatsapp_chat(chat_data)
+                print("  [OK] Loaded to Neo4j")
+
+            except Exception as e:
+                print(f"  [ERROR] Failed to load to Neo4j: {e}")
+                import traceback
+                print(f"  [ERROR] Traceback:\n{traceback.format_exc()}")
+                return False
+        else:
+            print("\n[STEP 2/3] Skipping Neo4j load (disabled in config)")
+
+        # Step 3: Cleanup (if enabled)
+        if self.config['processing']['clear_temp_files']:
+            print("\n[STEP 3/3] Cleaning up temporary files...")
+            try:
+                temp_file.unlink()
+                print("  [OK] Deleted temporary file")
+            except Exception as e:
+                print(f"  [WARN] Could not delete temp file: {e}")
+        else:
+            print("\n[STEP 3/3] Keeping temporary files (clear_temp_files=false)")
+
+        print("\n" + "="*70)
+        print("[SUCCESS] WHATSAPP CHAT PROCESSING COMPLETE")
+        print("="*70)
+        return True
+
     def _ensure_neo4j_connection(self):
-        """Ensure Neo4j connection is established"""
+        """Ensure Neo4j connection is established (for documents/meetings)"""
         if not self.neo4j_loader:
             neo4j_config = self.config['neo4j']
             self.neo4j_loader = RAGNeo4jLoader(
@@ -271,6 +380,18 @@ class GoogleDriveRAGPipeline:
             )
             # Create schema if needed
             self.neo4j_loader.create_schema()
+
+    def _ensure_unified_neo4j_connection(self):
+        """Ensure unified Neo4j connection is established (for WhatsApp)"""
+        if not self.unified_loader:
+            neo4j_config = self.config['neo4j']
+            self.unified_loader = UnifiedRAGNeo4jLoader(
+                neo4j_config['uri'],
+                neo4j_config['user'],
+                neo4j_config['password']
+            )
+            # Create schema if needed
+            self.unified_loader.create_schema()
 
     def start_monitoring(self):
         """Start monitoring Google Drive folder"""
@@ -370,6 +491,8 @@ class GoogleDriveRAGPipeline:
         """Close connections"""
         if self.neo4j_loader:
             self.neo4j_loader.close()
+        if self.unified_loader:
+            self.unified_loader.close()
 
 
 def main():
