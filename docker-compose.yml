@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  gdrive-monitor:
+    build: .
+    container_name: gdrive-rag-pipeline
+    restart: unless-stopped
+    volumes:
+      - ./config:/app/config
+      - ./gdrive_transcripts:/app/gdrive_transcripts
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: python run_gdrive.py monitor
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Optional: Run chatbot in parallel
+  chatbot:
+    build: .
+    container_name: rag-chatbot
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./config:/app/config
+    command: python run_chatbot.py
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
