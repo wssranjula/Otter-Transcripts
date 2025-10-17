@@ -1,6 +1,6 @@
 """
 Document Parser for RAG Pipeline
-Supports: DOCX, PDF, Excel (XLSX, XLS)
+Supports: DOCX, PDF, Excel (XLSX, XLS), TXT
 Converts documents to transcript-like text format for RAG processing
 """
 
@@ -16,7 +16,7 @@ class DocumentParser:
 
     def __init__(self):
         """Initialize document parser with required libraries"""
-        self.supported_extensions = ['.docx', '.pdf', '.xlsx', '.xls']
+        self.supported_extensions = ['.docx', '.pdf', '.xlsx', '.xls', '.txt']
 
     def is_supported(self, file_path: str) -> bool:
         """Check if file type is supported"""
@@ -42,6 +42,8 @@ class DocumentParser:
             return self._parse_pdf(file_path, file_content)
         elif ext in ['.xlsx', '.xls']:
             return self._parse_excel(file_path, file_content)
+        elif ext == '.txt':
+            return self._parse_txt(file_path, file_content)
         else:
             raise ValueError(f"Unsupported file type: {ext}")
 
@@ -192,6 +194,33 @@ class DocumentParser:
             'text': full_text,
             'metadata': metadata,
             'type': 'spreadsheet'
+        }
+
+    def _parse_txt(self, file_path: str, file_content: Optional[bytes] = None) -> Dict:
+        """Parse plain text file"""
+        # Load text content
+        if file_content:
+            text = file_content.decode('utf-8', errors='ignore')
+        else:
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                text = f.read()
+
+        # Basic metadata
+        metadata = {
+            'title': Path(file_path).stem,
+            'author': 'Unknown',
+            'created': None,
+            'modified': None,
+            'source_file': Path(file_path).name,
+            'source_type': 'txt',
+            'character_count': len(text),
+            'line_count': len(text.splitlines())
+        }
+
+        return {
+            'text': text.strip(),
+            'metadata': metadata,
+            'type': 'document'
         }
 
     def convert_to_transcript_format(self, parsed_doc: Dict, timestamp: Optional[str] = None) -> str:

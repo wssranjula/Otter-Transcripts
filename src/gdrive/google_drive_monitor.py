@@ -31,6 +31,7 @@ class GoogleDriveMonitor:
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
         'application/vnd.ms-excel': '.xls',
         'application/msword': '.doc',
+        'text/plain': '.txt',
     }
 
     def __init__(self, credentials_file: str = 'config/credentials.json',
@@ -154,13 +155,14 @@ class GoogleDriveMonitor:
             print(f"[ERROR] Error finding folder: {e}")
             return None
 
-    def list_documents_in_folder(self, folder_id: str, include_all: bool = False) -> List[Dict]:
+    def list_documents_in_folder(self, folder_id: str, include_all: bool = False, recursive: bool = True) -> List[Dict]:
         """
         List documents in a folder
 
         Args:
             folder_id: Google Drive folder ID
             include_all: If False, only return unprocessed files
+            recursive: If True, also scan subfolders
 
         Returns:
             List of file metadata dicts
@@ -169,7 +171,9 @@ class GoogleDriveMonitor:
             raise RuntimeError("Not authenticated. Call authenticate() first.")
 
         try:
-            # Build query
+            all_files = []
+
+            # Get files directly in this folder
             mime_type_query = " or ".join(
                 f"mimeType='{mime}'" for mime in self.SUPPORTED_MIME_TYPES.keys()
             )
@@ -184,12 +188,34 @@ class GoogleDriveMonitor:
             ).execute()
 
             files = results.get('files', [])
+            all_files.extend(files)
+
+            # If recursive, also get subfolders and scan them
+            if recursive:
+                subfolder_query = f"'{folder_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
+                subfolder_results = self.service.files().list(
+                    q=subfolder_query,
+                    spaces='drive',
+                    fields='files(id, name)',
+                    pageSize=100
+                ).execute()
+
+                subfolders = subfolder_results.get('files', [])
+
+                # Recursively scan each subfolder
+                for subfolder in subfolders:
+                    subfolder_files = self.list_documents_in_folder(
+                        subfolder['id'],
+                        include_all=True,  # Get all files, will filter later
+                        recursive=True
+                    )
+                    all_files.extend(subfolder_files)
 
             # Filter processed files if needed
             if not include_all:
-                files = [f for f in files if f['id'] not in self.processed_files]
+                all_files = [f for f in all_files if f['id'] not in self.processed_files]
 
-            return files
+            return all_files
 
         except Exception as e:
             print(f"[ERROR] Error listing documents: {e}")
