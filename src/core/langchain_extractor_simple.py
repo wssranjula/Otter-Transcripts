@@ -75,7 +75,9 @@ class SimplifiedMistralExtractor:
             mistral_api_key=api_key,
             model=model,
             temperature=0.1,
-            max_tokens=3000
+            max_tokens=3000,
+            timeout=120,  # 2 minute timeout
+            max_retries=2
         )
 
         self.extraction_chain = self._create_extraction_chain()
