@@ -1,0 +1,26 @@
+{
+  "postgres": {
+    "connection_string": "postgresql://username:password@host:5432/database?sslmode=require",
+    
+    "comment": "Alternatively, use individual parameters:",
+    "host": "your-neon-host.neon.tech",
+    "database": "your-database-name",
+    "user": "your-username",
+    "password": "your-password",
+    "port": 5432
+  },
+  
+  "embeddings": {
+    "provider": "mistral",
+    "model": "mistral-embed",
+    "dimensions": 1024,
+    "batch_size": 50
+  },
+  
+  "notes": {
+    "setup": "Sign up at https://neon.tech and create a new project",
+    "pgvector": "pgvector extension is pre-installed in Neon",
+    "connection_string": "postgresql://user:password@host/database?sslmode=require"
+  }
+}
+

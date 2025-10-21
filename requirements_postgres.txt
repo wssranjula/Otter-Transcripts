@@ -1,0 +1,53 @@
+# Postgres Mirror Database Requirements
+# Complete dependencies for Postgres + pgvector + embeddings setup
+
+# Core Python dependencies
+python-dateutil>=2.8.2
+
+# Postgres + pgvector
+psycopg2-binary>=2.9.9  # Postgres adapter for Python
+pgvector>=0.2.4         # pgvector extension client
+
+# Mistral API for embeddings
+mistralai>=1.0.0        # Mistral client for embeddings
+
+# LangChain (if using for entity extraction)
+langchain>=0.1.0
+langchain-mistralai>=0.0.5
+langchain-core>=0.1.0
+pydantic>=2.5.0
+
+# Optional: Alternative embedding providers
+# sentence-transformers>=2.2.0  # Local embeddings (free)
+# openai>=1.0.0                 # OpenAI embeddings
+
+# Optional: SSL/TLS support
+certifi>=2023.0.0       # SSL certificates for Neon
+
+# Installation Instructions:
+# 1. Install all requirements:
+#    pip install -r requirements_postgres.txt
+#
+# 2. Set up Neon Postgres:
+#    - Sign up at https://neon.tech
+#    - Create a new project
+#    - pgvector extension is pre-installed
+#    - Copy connection details to config/config.json
+#
+# 3. Configure in config/config.json:
+#    "postgres": {
+#      "enabled": true,
+#      "host": "your-project.neon.tech",
+#      "database": "neondb",
+#      "user": "username",
+#      "password": "password",
+#      "port": 5432
+#    },
+#    "embeddings": {
+#      "enabled": true,
+#      "api_key": "your-mistral-api-key"
+#    }
+#
+# 4. Run dual pipeline:
+#    python src/core/run_dual_pipeline.py --json knowledge_graph_rag.json
+

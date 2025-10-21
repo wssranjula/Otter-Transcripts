@@ -120,7 +120,33 @@ python run_gdrive.py monitor
 
 See `docs/GDRIVE_SETUP_GUIDE.md` for detailed setup instructions.
 
-### 4. Chatbot Interface
+### 4. Postgres Mirror Database (Optional)
+
+Set up a Postgres mirror with pgvector for backup and semantic search:
+
+```bash
+# Install Postgres dependencies
+pip install -r requirements_postgres.txt
+
+# Configure in config/config.json
+# (Set postgres.enabled = true and add connection details)
+
+# Setup and load data to both Neo4j + Postgres
+python src/core/run_dual_pipeline.py --json knowledge_graph_rag.json
+
+# Test the setup
+python tests/test_postgres_mirror.py
+```
+
+**Benefits**:
+- 📦 **Backup Layer**: Raw JSON backup of all data
+- 🔍 **Vector Search**: pgvector embeddings for semantic similarity
+- 🔄 **Relational Queries**: SQL-based analytics and comparisons
+- ⚡ **Fallback**: Continue working if Neo4j is unavailable
+
+See `docs/POSTGRES_MIRROR_SETUP.md` for complete setup guide.
+
+### 5. Chatbot Interface
 
 Launch the web-based chatbot:
 
@@ -148,6 +174,12 @@ python src/chatbot/chatbot.py
 - **Seamless Integration**: Automatically adds to knowledge graph
 - **State Tracking**: Never reprocess the same file
 
+### Postgres Mirror (Optional)
+- **Dual Database**: Write to both Neo4j and Postgres simultaneously
+- **Vector Embeddings**: 1024-dim Mistral embeddings with pgvector
+- **Backup & Recovery**: Full JSON backup of parsed data
+- **Alternative Retrieval**: SQL-based semantic search as fallback
+
 ### Chatbot
 - **Web UI**: Beautiful Streamlit interface
 - **CLI**: Terminal-based chatbot
@@ -162,7 +194,18 @@ python src/chatbot/chatbot.py
   "mistral_api_key": "your-key",
   "neo4j_uri": "bolt://...",
   "neo4j_user": "neo4j",
-  "neo4j_password": "your-password"
+  "neo4j_password": "your-password",
+  
+  "postgres": {
+    "enabled": false,
+    "connection_string": "postgresql://user:pass@host:5432/db?sslmode=require"
+  },
+  
+  "embeddings": {
+    "enabled": false,
+    "provider": "mistral",
+    "api_key": "your-mistral-api-key"
+  }
 }
 ```
 

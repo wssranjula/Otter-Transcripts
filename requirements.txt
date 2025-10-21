@@ -10,6 +10,13 @@ langchain-mistralai>=0.0.5
 langchain-core>=0.1.0
 pydantic>=2.5.0
 
+# Postgres Mirror Database + pgvector
+psycopg2-binary>=2.9.9
+pgvector>=0.2.4
+
+# Embeddings
+mistralai>=1.0.0
+
 # Alternative: Ollama (Free & Local)
 # Install: https://ollama.ai/
 # Then run: ollama pull mistral

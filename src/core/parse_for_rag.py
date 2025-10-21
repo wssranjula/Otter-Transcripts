@@ -12,17 +12,34 @@ from typing import Dict, List
 from src.core.chunking_logic import TranscriptChunker
 from src.core.langchain_extractor_simple import SimplifiedMistralExtractor
 
+try:
+    from src.core.embeddings import MistralEmbedder
+    EMBEDDINGS_AVAILABLE = True
+except ImportError:
+    EMBEDDINGS_AVAILABLE = False
+
 
 class RAGTranscriptParser:
     """Parse transcripts optimized for RAG retrieval"""
 
-    def __init__(self, transcript_dir: str, mistral_api_key: str, model: str = "mistral-large-latest"):
+    def __init__(self, transcript_dir: str, mistral_api_key: str, model: str = "mistral-large-latest", 
+                 generate_embeddings: bool = False):
         self.transcript_dir = Path(transcript_dir)
         self.mistral_api_key = mistral_api_key
+        self.generate_embeddings = generate_embeddings
 
         # Initialize components
         self.chunker = TranscriptChunker(min_chunk_size=300, max_chunk_size=1500)
         self.extractor = SimplifiedMistralExtractor(api_key=mistral_api_key, model=model)
+
+        # Initialize embedder if requested
+        self.embedder = None
+        if generate_embeddings:
+            if EMBEDDINGS_AVAILABLE:
+                self.embedder = MistralEmbedder(api_key=mistral_api_key)
+                print("[OK] Embeddings enabled (Mistral 1024-dim)")
+            else:
+                print("[WARN] Embeddings requested but module not available. Install: pip install mistralai")
 
         # Caches
         self.entity_cache = {}  # Unified entity cache
@@ -87,9 +104,18 @@ class RAGTranscriptParser:
         actions = self._process_actions(entities_data, chunks)
         print(f"    [OK] {len(decisions)} decisions, {len(actions)} actions")
 
+        # Convert chunks to dicts
+        chunk_dicts = [self._chunk_to_dict(c, meeting_info, i) for i, c in enumerate(chunks)]
+
+        # Generate embeddings if enabled
+        if self.embedder:
+            print(f"  Step 5: Generating embeddings...")
+            self.embedder.embed_chunks(chunk_dicts)
+            print(f"    [OK] Embeddings generated")
+
         return {
             'meeting': meeting_info,
-            'chunks': [self._chunk_to_dict(c, meeting_info, i) for i, c in enumerate(chunks)],
+            'chunks': chunk_dicts,
             'entities': entities,
             'chunk_entity_links': chunk_entity_links,
             'decisions': decisions,
