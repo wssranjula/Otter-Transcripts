@@ -174,11 +174,13 @@ python src/chatbot/chatbot.py
 - **Seamless Integration**: Automatically adds to knowledge graph
 - **State Tracking**: Never reprocess the same file
 
-### Postgres Mirror (Optional)
+### Postgres Mirror Database (Optional) 🆕
 - **Dual Database**: Write to both Neo4j and Postgres simultaneously
 - **Vector Embeddings**: 1024-dim Mistral embeddings with pgvector
-- **Backup & Recovery**: Full JSON backup of parsed data
-- **Alternative Retrieval**: SQL-based semantic search as fallback
+- **Semantic Search**: Cosine similarity search on embeddings
+- **Backup & Fallback**: Complete relational mirror of Neo4j data
+- **Free Tier Available**: Use Neon serverless Postgres (0.5GB free)
+- **SQL Analytics**: Query your knowledge graph with standard SQL
 
 ### Chatbot
 - **Web UI**: Beautiful Streamlit interface
@@ -233,6 +235,9 @@ python src/chatbot/chatbot.py
 | **[SCHEMA_FOR_RAG.md](docs/SCHEMA_FOR_RAG.md)** | Neo4j graph schema |
 | **[CHATBOT_README.md](docs/CHATBOT_README.md)** | Chatbot usage guide |
 | **[DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md)** | Production deployment |
+| **[POSTGRES_INDEX.md](docs/POSTGRES_INDEX.md)** | 🆕 Postgres mirror database docs |
+| **[POSTGRES_DEPLOYMENT_PLAN.md](POSTGRES_DEPLOYMENT_PLAN.md)** | 🆕 Postgres deployment strategy |
+| **[POSTGRES_UPGRADE_EXISTING_INFOMANIAK.md](POSTGRES_UPGRADE_EXISTING_INFOMANIAK.md)** | 🆕 Upgrade existing deployments |
 
 ## 🛠️ Common Tasks
 

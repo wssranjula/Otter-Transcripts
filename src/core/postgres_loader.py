@@ -7,16 +7,13 @@ Supports: Meetings, Documents, WhatsApp Chats
 import json
 import psycopg2
 from psycopg2 import pool, extras
-from psycopg2.extensions import register_adapter, AsIs
+from psycopg2.extensions import register_adapter, AsIs  
 from typing import Dict, List, Optional
 from pathlib import Path
 
 
-# Adapter for Python lists to PostgreSQL arrays
-def adapt_list(lst):
-    return AsIs(','.join([f"'{item}'" for item in lst]))
-
-register_adapter(list, adapt_list)
+# Note: psycopg2 handles Python lists → PostgreSQL arrays natively
+# We'll use Json() for complex data and let psycopg2 handle simple arrays
 
 
 class UnifiedPostgresLoader:
@@ -372,9 +369,19 @@ class UnifiedPostgresLoader:
             if 'embedding' in chunk and chunk['embedding']:
                 embedding_str = '[' + ','.join(map(str, chunk['embedding'])) + ']'
             
-            # Convert arrays to proper format
+            # Convert arrays to PostgreSQL array format
             speakers = chunk.get('speakers', []) or []
             participants = chunk.get('participants', []) or []
+            # PostgreSQL array literal format: '{val1,val2}' (escape quotes in values)
+            def to_pg_array(arr):
+                if not arr:
+                    return '{}'
+                # Escape quotes and backslashes in array elements
+                escaped = [str(item).replace('\\', '\\\\').replace('"', '\\"') for item in arr]
+                return '{' + ','.join(f'"{item}"' for item in escaped) + '}'
+            
+            speakers_pg = to_pg_array(speakers)
+            participants_pg = to_pg_array(participants)
             
             chunk_data.append((
                 chunk['id'],
@@ -384,12 +391,12 @@ class UnifiedPostgresLoader:
                 chunk.get('sequence_number', 0),
                 chunk.get('importance_score', 0.5),
                 chunk.get('chunk_type'),
-                speakers,
+                speakers_pg,
                 chunk.get('start_time'),
                 chunk.get('meeting_id'),
                 chunk.get('meeting_title'),
                 chunk.get('meeting_date'),
-                participants,
+                participants_pg,
                 chunk.get('message_count'),
                 chunk.get('time_start'),
                 chunk.get('time_end'),
@@ -399,10 +406,10 @@ class UnifiedPostgresLoader:
                 chunk.get('source_title'),
                 chunk.get('source_date'),
                 chunk.get('source_type'),
-                json.dumps(chunk.get('chunk_metadata', {})) if chunk.get('chunk_metadata') else None
+                json.dumps(chunk.get('chunk_metadata', {})) if chunk.get('chunk_metadata') else '{}'
             ))
         
-        # Batch upsert
+        # Batch upsert - use execute_values for better array handling
         sql = """
             INSERT INTO chunks (
                 id, text, embedding, source_id, sequence_number,
@@ -412,10 +419,7 @@ class UnifiedPostgresLoader:
                 chunk_duration_minutes, has_media, media_count,
                 source_title, source_date, source_type, chunk_metadata
             )
-            VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-            )
+            VALUES %s
             ON CONFLICT (id) DO UPDATE SET
                 text = EXCLUDED.text,
                 embedding = EXCLUDED.embedding,
@@ -423,7 +427,13 @@ class UnifiedPostgresLoader:
                 updated_at = NOW()
         """
         
-        extras.execute_batch(cursor, sql, chunk_data, page_size=50)
+        # Use execute_values for batch insertion
+        template = """(
+            %s, %s, %s::vector, %s, %s, %s, %s, %s::TEXT[], %s, %s, %s, %s,
+            %s::TEXT[], %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::JSONB
+        )"""
+        
+        extras.execute_values(cursor, sql, chunk_data, template=template, page_size=50)
         cursor.close()
         
         print(f"  [OK] Loaded {len(chunks)} chunks")

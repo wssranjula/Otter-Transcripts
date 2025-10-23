@@ -17,9 +17,18 @@ from src.core.load_to_neo4j_rag import RAGNeo4jLoader
 from src.core.load_to_neo4j_unified import UnifiedRAGNeo4jLoader
 from src.whatsapp.whatsapp_parser import WhatsAppParser
 
+ # Postgres support (optional)
+try:
+    from src.core.postgres_loader import UnifiedPostgresLoader
+    from src.core.embeddings import MistralEmbedder
+    POSTGRES_AVAILABLE = True
+except ImportError:
+    POSTGRES_AVAILABLE = False
+    print("[WARN] Postgres support not available. Install: pip install -r requirements_postgres.txt")
+
 
 class GoogleDriveRAGPipeline:
-    """Integrated pipeline: Google Drive → Document Parser → RAG → Neo4j"""
+    """Integrated pipeline: Google Drive → Document Parser → RAG → Neo4j + Postgres"""
 
     def __init__(self, config_file: str = 'config/gdrive_config.json'):
         """
@@ -30,6 +39,10 @@ class GoogleDriveRAGPipeline:
         """
         self.config = self._load_config(config_file)
 
+        # Check if Postgres and embeddings are enabled
+        self.postgres_enabled = self.config.get('postgres', {}).get('enabled', False) and POSTGRES_AVAILABLE
+        self.embeddings_enabled = self.config.get('embeddings', {}).get('enabled', False)
+
         # Initialize components
         self.doc_parser = DocumentParser()
         self.gdrive_monitor = GoogleDriveMonitor(
@@ -38,20 +51,30 @@ class GoogleDriveRAGPipeline:
             state_file=self.config['google_drive']['state_file']
         )
 
-        # RAG components
+        # RAG components with optional embedding support
         self.rag_parser = RAGTranscriptParser(
             transcript_dir=self.config['rag']['temp_transcript_dir'],
             mistral_api_key=self.config['rag']['mistral_api_key'],
-            model=self.config['rag']['model']
+            model=self.config['rag']['model'],
+            generate_embeddings=self.embeddings_enabled
         )
 
-        # WhatsApp parser
+        # WhatsApp parser with optional embedding support
         self.whatsapp_parser = WhatsAppParser(
-            mistral_api_key=self.config['rag']['mistral_api_key']
+            mistral_api_key=self.config['rag']['mistral_api_key'],
+            generate_embeddings=self.embeddings_enabled
         )
 
+        # Database loaders
         self.neo4j_loader = None  # Initialize when needed
         self.unified_loader = None  # For WhatsApp/multi-source support
+        self.postgres_loader = None  # Postgres mirror database
+        
+        # Embeddings (if enabled and not already in parsers)
+        self.embedder = None
+        if self.embeddings_enabled and POSTGRES_AVAILABLE:
+            self.embedder = MistralEmbedder(api_key=self.config['rag']['mistral_api_key'])
+            print("[OK] Embeddings enabled for Google Drive pipeline")
 
     def _load_config(self, config_file: str) -> Dict:
         """Load configuration from JSON file"""
@@ -87,6 +110,18 @@ class GoogleDriveRAGPipeline:
                 "user": "neo4j",
                 "password": "YOUR_NEO4J_PASSWORD"
             },
+            "postgres": {
+                "enabled": False,
+                "connection_string": "postgresql://user:pass@host:5432/db?sslmode=require",
+                "comment": "Set enabled to true and add your Neon connection string"
+            },
+            "embeddings": {
+                "enabled": False,
+                "provider": "mistral",
+                "model": "mistral-embed",
+                "dimensions": 1024,
+                "comment": "Set enabled to true to generate embeddings (for Postgres vector search)"
+            },
             "processing": {
                 "auto_load_to_neo4j": True,
                 "clear_temp_files": False,
@@ -102,6 +137,8 @@ class GoogleDriveRAGPipeline:
         print("  - Mistral API key")
         print("  - Neo4j credentials")
         print("  - Google Drive folder name")
+        print("  - [Optional] Postgres connection string (for mirror database)")
+        print("  - [Optional] Enable embeddings (for vector search)")
 
     def setup_google_drive(self):
         """Setup and authenticate Google Drive"""
@@ -234,13 +271,10 @@ class GoogleDriveRAGPipeline:
             print(f"  [ERROR] Traceback:\n{traceback.format_exc()}")
             return False
 
-        # Step 4: Load to Neo4j (if enabled)
-        if self.config['processing']['auto_load_to_neo4j']:
-            print("\n[STEP 4/5] Loading to Neo4j...")
+        # Step 4: Load to databases (Neo4j and/or Postgres)
+        if self.config['processing']['auto_load_to_neo4j'] or self.postgres_enabled:
+            print("\n[STEP 4/5] Loading to databases...")
             try:
-                print(f"  [LOG] Ensuring Neo4j connection...")
-                self._ensure_neo4j_connection()
-
                 # Create temporary JSON for this document
                 temp_json = {
                     'metadata': {
@@ -261,18 +295,29 @@ class GoogleDriveRAGPipeline:
                 with open(temp_json_file, 'w', encoding='utf-8') as f:
                     json.dump(temp_json, f, indent=2)
 
-                # Load to Neo4j
-                print(f"  [LOG] Loading to Neo4j...")
-                self.neo4j_loader.load_from_json(str(temp_json_file))
-                print("  [OK] Loaded to Neo4j")
+                # Load to Neo4j (if enabled)
+                if self.config['processing']['auto_load_to_neo4j']:
+                    print(f"  [LOG] Ensuring Neo4j connection...")
+                    self._ensure_neo4j_connection()
+                    print(f"  [LOG] Loading to Neo4j...")
+                    self.neo4j_loader.load_from_json(str(temp_json_file))
+                    print("  [OK] Loaded to Neo4j")
+                
+                # Load to Postgres (if enabled)
+                if self.postgres_enabled:
+                    print(f"  [LOG] Ensuring Postgres connection...")
+                    self._ensure_postgres_connection()
+                    print(f"  [LOG] Loading to Postgres...")
+                    self.postgres_loader.load_meeting_data(result)
+                    print("  [OK] Loaded to Postgres")
 
             except Exception as e:
-                print(f"  [ERROR] Failed to load to Neo4j: {e}")
+                print(f"  [ERROR] Failed to load to databases: {e}")
                 import traceback
                 print(f"  [ERROR] Traceback:\n{traceback.format_exc()}")
                 return False
         else:
-            print("\n[STEP 4/5] Skipping Neo4j load (disabled in config)")
+            print("\n[STEP 4/5] Skipping database load (all disabled)")
 
         # Step 5: Cleanup (if enabled)
         if self.config['processing']['clear_temp_files']:
@@ -333,25 +378,33 @@ class GoogleDriveRAGPipeline:
             print(f"  [ERROR] Traceback:\n{traceback.format_exc()}")
             return False
 
-        # Step 2: Load to Neo4j (if enabled)
-        if self.config['processing']['auto_load_to_neo4j']:
-            print("\n[STEP 2/3] Loading to Neo4j...")
+        # Step 2: Load to databases (Neo4j and/or Postgres)
+        if self.config['processing']['auto_load_to_neo4j'] or self.postgres_enabled:
+            print("\n[STEP 2/3] Loading to databases...")
             try:
-                print(f"  [LOG] Ensuring unified Neo4j connection...")
-                self._ensure_unified_neo4j_connection()
-
-                # Load WhatsApp data
-                print(f"  [LOG] Loading WhatsApp chat to Neo4j...")
-                self.unified_loader.load_whatsapp_chat(chat_data)
-                print("  [OK] Loaded to Neo4j")
+                # Load to Neo4j (if enabled)
+                if self.config['processing']['auto_load_to_neo4j']:
+                    print(f"  [LOG] Ensuring unified Neo4j connection...")
+                    self._ensure_unified_neo4j_connection()
+                    print(f"  [LOG] Loading WhatsApp chat to Neo4j...")
+                    self.unified_loader.load_whatsapp_chat(chat_data)
+                    print("  [OK] Loaded to Neo4j")
+                
+                # Load to Postgres (if enabled)
+                if self.postgres_enabled:
+                    print(f"  [LOG] Ensuring Postgres connection...")
+                    self._ensure_postgres_connection()
+                    print(f"  [LOG] Loading WhatsApp chat to Postgres...")
+                    self.postgres_loader.load_whatsapp_data(chat_data)
+                    print("  [OK] Loaded to Postgres")
 
             except Exception as e:
-                print(f"  [ERROR] Failed to load to Neo4j: {e}")
+                print(f"  [ERROR] Failed to load to databases: {e}")
                 import traceback
                 print(f"  [ERROR] Traceback:\n{traceback.format_exc()}")
                 return False
         else:
-            print("\n[STEP 2/3] Skipping Neo4j load (disabled in config)")
+            print("\n[STEP 2/3] Skipping database load (all disabled)")
 
         # Step 3: Cleanup (if enabled)
         if self.config['processing']['clear_temp_files']:
@@ -392,6 +445,26 @@ class GoogleDriveRAGPipeline:
             )
             # Create schema if needed
             self.unified_loader.create_schema()
+    
+    def _ensure_postgres_connection(self):
+        """Ensure Postgres connection is established"""
+        if not self.postgres_loader and self.postgres_enabled:
+            postgres_config = self.config.get('postgres', {})
+            
+            # Support both connection string and individual params
+            conn_str = postgres_config.get('connection_string')
+            if conn_str:
+                self.postgres_loader = UnifiedPostgresLoader(connection_string=conn_str)
+            else:
+                self.postgres_loader = UnifiedPostgresLoader(
+                    host=postgres_config.get('host'),
+                    database=postgres_config.get('database'),
+                    user=postgres_config.get('user'),
+                    password=postgres_config.get('password'),
+                    port=postgres_config.get('port', 5432)
+                )
+            # Create schema if needed
+            self.postgres_loader.create_schema()
 
     def start_monitoring(self):
         """Start monitoring Google Drive folder"""

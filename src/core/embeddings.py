@@ -7,9 +7,16 @@ import time
 from typing import List, Optional
 
 try:
-    from mistralai.client import MistralClient
+    # New Mistral client (v1.0+)
+    from mistralai import Mistral
+    MISTRAL_NEW_API = True
 except ImportError:
-    from mistralai import Mistral as MistralClient
+    try:
+        # Old Mistral client (deprecated)
+        from mistralai.client import MistralClient
+        MISTRAL_NEW_API = False
+    except ImportError:
+        raise ImportError("Please install mistralai: pip install mistralai")
 
 
 class MistralEmbedder:
@@ -24,17 +31,18 @@ class MistralEmbedder:
             model: Embedding model (default: mistral-embed)
             batch_size: Number of texts to process per batch
         """
-        try:
-            # Try new Mistral client (v1.0+)
+        if MISTRAL_NEW_API:
+            # New API (v1.0+)
+            self.client = Mistral(api_key=api_key)
+        else:
+            # Old API (deprecated, for backward compatibility)
             self.client = MistralClient(api_key=api_key)
-        except TypeError:
-            # Fallback to older version
-            self.client = MistralClient(api_key)
         
         self.api_key = api_key
         self.model = model
         self.batch_size = batch_size
         self.dimensions = 1024  # Mistral embed produces 1024-dim vectors
+        self.new_api = MISTRAL_NEW_API
         
         print(f"[OK] MistralEmbedder initialized (model: {model}, batch_size: {batch_size})")
     
@@ -64,28 +72,22 @@ class MistralEmbedder:
             
             try:
                 # Call Mistral API
-                try:
+                if self.new_api:
                     # New API (v1.0+)
+                    response = self.client.embeddings.create(
+                        model=self.model,
+                        inputs=batch
+                    )
+                    # Extract embeddings from new API response
+                    batch_embeddings = [item.embedding for item in response.data]
+                else:
+                    # Old API (deprecated)
                     response = self.client.embeddings(
                         model=self.model,
                         input=batch
                     )
-                except AttributeError:
-                    # Old API
-                    response = self.client.embeddings(
-                        model=self.model,
-                        inputs=batch
-                    )
-                
-                # Extract embeddings
-                try:
+                    # Extract embeddings from old API response
                     batch_embeddings = [item.embedding for item in response.data]
-                except AttributeError:
-                    # Handle different response structure
-                    if hasattr(response, 'embeddings'):
-                        batch_embeddings = response.embeddings
-                    else:
-                        batch_embeddings = response
                 
                 embeddings.extend(batch_embeddings)
                 

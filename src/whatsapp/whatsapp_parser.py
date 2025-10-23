@@ -10,6 +10,14 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 
+# Optional embeddings support
+try:
+    from src.core.embeddings import MistralEmbedder
+    EMBEDDINGS_AVAILABLE = True
+except ImportError:
+    EMBEDDINGS_AVAILABLE = False
+    MistralEmbedder = None
+
 
 @dataclass
 class WhatsAppMessage:

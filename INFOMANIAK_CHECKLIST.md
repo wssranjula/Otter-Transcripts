@@ -54,7 +54,7 @@
 
 ---
 
-## Phase 4: Configuration (10 minutes)
+## Phase 4: Configuration (15 minutes)
 
 - [ ] Edit config file:
   ```bash
@@ -63,8 +63,32 @@
 
 - [ ] Add your Mistral API key
 - [ ] Add your Neo4j URI, username, password
+- [ ] Add your Postgres connection string (Neon or local)
+- [ ] Enable Postgres: `"postgres": {"enabled": true}`
+- [ ] Enable embeddings: `"embeddings": {"enabled": true}`
 - [ ] Verify Google Drive folder name
 - [ ] Save and exit (Ctrl+X, Y, Enter)
+
+### Phase 4.5: Setup Postgres Database (10 minutes)
+
+**Option A: Neon (Recommended)**
+- [ ] Create account at https://neon.tech
+- [ ] Create project "otter-rag-mirror"
+- [ ] Copy connection string
+- [ ] Add to config file
+
+**Option B: Local Postgres**
+- [ ] Install PostgreSQL 16: `sudo apt install postgresql-16 postgresql-16-pgvector`
+- [ ] Create database and user (see DEPLOYMENT_INFOMANIAK.md Phase 4)
+- [ ] Enable pgvector extension
+
+**Initialize Schema:**
+- [ ] Run schema creation script:
+  ```bash
+  cd ~/Otter-Transcripts && source venv/bin/activate
+  python -c "from src.core.postgres_loader import UnifiedPostgresLoader; import json; config = json.load(open('config/gdrive_config.json')); loader = UnifiedPostgresLoader(connection_string=config['postgres']['connection_string']); loader.create_schema(); loader.close()"
+  ```
+- [ ] Verify: `[OK] Postgres schema created!`
 
 ---
 
@@ -339,11 +363,34 @@ sudo systemctl restart gdrive-monitor
 
 - [ ] Services show "active (running)" status
 - [ ] Logs show successful Google Drive connection
+- [ ] Logs show successful Postgres connection
 - [ ] Test document uploads are processed automatically
 - [ ] Neo4j receives the extracted data
+- [ ] Postgres receives the extracted data (with embeddings)
+- [ ] Vector search test passes in Postgres
 - [ ] Chatbot is accessible and responsive
 - [ ] No errors in error logs
 - [ ] System resources are under 70% usage
+
+### Postgres Verification Commands
+
+```sql
+-- Connect to your Postgres database and run:
+
+-- Check record counts
+SELECT 'sources' as table, COUNT(*) FROM sources
+UNION ALL SELECT 'chunks', COUNT(*) FROM chunks
+UNION ALL SELECT 'entities', COUNT(*) FROM entities;
+
+-- Verify embeddings
+SELECT 
+    COUNT(*) as total, 
+    COUNT(embedding) as with_embeddings 
+FROM chunks;
+
+-- Test vector search
+SELECT LEFT(text, 100) FROM chunks WHERE embedding IS NOT NULL LIMIT 1;
+```
 
 ---
 

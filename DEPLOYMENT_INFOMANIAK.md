@@ -138,6 +138,16 @@ nano config/gdrive_config.json
     "user": "neo4j",
     "password": "YOUR_PASSWORD"
   },
+  "postgres": {
+    "enabled": true,
+    "connection_string": "postgresql://user:pass@host:5432/db?sslmode=require"
+  },
+  "embeddings": {
+    "enabled": true,
+    "provider": "mistral",
+    "model": "mistral-embed",
+    "dimensions": 1024
+  },
   "processing": {
     "auto_load_to_neo4j": true,
     "clear_temp_files": false,
@@ -163,7 +173,67 @@ nano config/credentials.json
 
 ---
 
-### Phase 4: Test the Pipeline (5 minutes)
+### Phase 4: Setup Postgres Mirror Database (15 minutes)
+
+#### Option A: Neon Database (Recommended - Free & Serverless) ⭐
+
+```bash
+# 1. Create Neon account at https://neon.tech (free tier)
+# 2. Create new project: "otter-rag-mirror"
+# 3. Copy connection string from Neon dashboard
+# 4. Update config with your connection string
+
+nano config/gdrive_config.json
+# Update postgres.connection_string with your Neon connection string
+```
+
+#### Option B: Local Postgres on VPS
+
+```bash
+# Install PostgreSQL 16 with pgvector
+sudo apt install -y postgresql-16 postgresql-16-pgvector
+
+# Create database
+sudo -u postgres psql
+```
+
+```sql
+CREATE DATABASE otter_rag_mirror;
+CREATE USER rag_user WITH PASSWORD 'secure_password';
+GRANT ALL PRIVILEGES ON DATABASE otter_rag_mirror TO rag_user;
+\c otter_rag_mirror
+CREATE EXTENSION vector;
+\q
+```
+
+```bash
+# Update config with local connection string
+nano config/gdrive_config.json
+# Set: "connection_string": "postgresql://rag_user:secure_password@localhost:5432/otter_rag_mirror"
+```
+
+#### Initialize Postgres Schema
+
+```bash
+cd ~/Otter-Transcripts
+source venv/bin/activate
+
+# Create schema
+python -c "
+from src.core.postgres_loader import UnifiedPostgresLoader
+import json
+with open('config/gdrive_config.json') as f:
+    config = json.load(f)
+loader = UnifiedPostgresLoader(connection_string=config['postgres']['connection_string'])
+loader.create_schema()
+loader.close()
+print('[OK] Postgres schema created!')
+"
+```
+
+---
+
+### Phase 5: Test the Pipeline (5 minutes)
 
 ```bash
 # Activate virtual environment
@@ -174,13 +244,21 @@ source venv/bin/activate
 python run_gdrive.py setup
 # This will open OAuth flow - follow the link in browser
 
-# Test batch processing
+# Test batch processing (loads to both Neo4j AND Postgres)
 python run_gdrive.py batch
+```
+
+**Expected output:**
+```
+[STEP 3/5] Generating embeddings... ✓
+[STEP 4/5] Loading to Neo4j... ✓
+[STEP 5/5] Loading to Postgres... ✓
+[SUCCESS] All files processed to both databases!
 ```
 
 ---
 
-### Phase 5: Setup as System Service (10 minutes)
+### Phase 6: Setup as System Service (10 minutes)
 
 #### Step 5.1: Create Systemd Service for Google Drive Monitor
 
