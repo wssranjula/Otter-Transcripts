@@ -20,11 +20,17 @@ Otter Transcripts/
 │   │   ├── google_drive_monitor.py     # Monitor Google Drive folders
 │   │   └── gdrive_rag_pipeline.py      # Google Drive to RAG pipeline
 │   │
-│   └── chatbot/                 # Chatbot interfaces
-│       ├── chatbot.py                  # CLI chatbot
-│       ├── streamlit_chatbot.py        # Web UI chatbot
-│       ├── analyze_retrieval.py        # Retrieval quality analyzer
-│       └── rq2.py                      # Query experiments
+│   ├── chatbot/                 # Chatbot interfaces
+│   │   ├── chatbot.py                  # CLI chatbot
+│   │   ├── streamlit_chatbot.py        # Web UI chatbot
+│   │   ├── analyze_retrieval.py        # Retrieval quality analyzer
+│   │   └── rq2.py                      # Query experiments
+│   │
+│   └── whatsapp/                # WhatsApp integration ✨ NEW
+│       ├── whatsapp_agent.py           # FastAPI webhook server
+│       ├── twilio_client.py            # Twilio API wrapper
+│       ├── conversation_manager.py     # History storage
+│       └── whatsapp_parser.py          # Chat export parser
 │
 ├── config/                      # Configuration files
 │   ├── config.json                     # Main RAG config
@@ -41,6 +47,8 @@ Otter Transcripts/
 │   ├── SCHEMA_FOR_RAG.md               # Neo4j schema
 │   ├── CHATBOT_README.md               # Chatbot documentation
 │   ├── STREAMLIT_CHATBOT_README.md     # Streamlit chatbot guide
+│   ├── WHATSAPP_BOT_README.md          # WhatsApp bot documentation ✨ NEW
+│   ├── TWILIO_SETUP_GUIDE.md           # WhatsApp setup guide ✨ NEW
 │   ├── DEPLOYMENT_GUIDE.md             # Deployment instructions
 │   └── ... (other guides)
 │
@@ -58,12 +66,17 @@ Otter Transcripts/
 │   ├── install_streamlit.bat
 │   └── run_streamlit.bat
 │
-├── run_gdrive.py               # 🚀 Google Drive launcher
-├── run_chatbot.py              # 🚀 Chatbot launcher
-├── requirements.txt            # Core dependencies
-├── requirements_gdrive.txt     # Google Drive dependencies
-├── requirements_streamlit.txt  # Streamlit dependencies
-└── README.md                   # This file
+├── run_gdrive.py                     # 🚀 Google Drive launcher
+├── run_chatbot.py                    # 🚀 Chatbot launcher
+├── run_whatsapp_agent.py             # 🚀 WhatsApp bot launcher ✨ NEW
+├── test_whatsapp_setup.py            # WhatsApp setup verification ✨ NEW
+├── requirements.txt                  # Core dependencies
+├── requirements_gdrive.txt           # Google Drive dependencies
+├── requirements_streamlit.txt        # Streamlit dependencies
+├── requirements_whatsapp.txt         # WhatsApp dependencies ✨ NEW
+├── WHATSAPP_QUICKSTART.md            # WhatsApp 5-min guide ✨ NEW
+├── WHATSAPP_INTEGRATION_SUMMARY.md   # WhatsApp feature summary ✨ NEW
+└── README.md                         # This file
 ```
 
 ## 🚀 Quick Start
@@ -160,6 +173,47 @@ Or use the CLI version:
 python src/chatbot/chatbot.py
 ```
 
+### 6. WhatsApp Bot ✨ NEW
+
+Add your RAG agent to WhatsApp groups! Mention the bot to get answers from your knowledge base.
+
+```bash
+# Install WhatsApp dependencies
+pip install -r requirements_whatsapp.txt
+
+# Verify setup
+python test_whatsapp_setup.py
+
+# Start WhatsApp bot
+python run_whatsapp_agent.py
+```
+
+**Usage in WhatsApp:**
+```
+@agent what was discussed about Germany?
+@agent who attended the UNEA meeting?
+@agent tell me more about that
+```
+
+**Quick Setup (5 minutes):**
+1. Sign up for Twilio: https://www.twilio.com/try-twilio
+2. Get Account SID and Auth Token
+3. Update `config/config.json` with credentials
+4. Start server and ngrok tunnel
+5. Configure webhook in Twilio Console
+6. Test in WhatsApp!
+
+See [WHATSAPP_QUICKSTART.md](WHATSAPP_QUICKSTART.md) for 5-minute setup guide.  
+See [docs/TWILIO_SETUP_GUIDE.md](docs/TWILIO_SETUP_GUIDE.md) for detailed instructions.
+
+**Features:**
+- 💬 **Group Chat Support** - Works in WhatsApp groups
+- 🎯 **@Mention Activation** - Only responds when mentioned
+- 🧠 **Conversation Memory** - Maintains context per user
+- 👥 **Multi-User** - Handles concurrent users
+- 🗄️ **PostgreSQL Storage** - Persistent conversation history
+- 🚀 **Production Ready** - FastAPI, async, error handling
+
 ## 📚 Key Features
 
 ### Core RAG Pipeline
@@ -181,6 +235,14 @@ python src/chatbot/chatbot.py
 - **Backup & Fallback**: Complete relational mirror of Neo4j data
 - **Free Tier Available**: Use Neon serverless Postgres (0.5GB free)
 - **SQL Analytics**: Query your knowledge graph with standard SQL
+
+### WhatsApp Bot ✨ NEW
+- **Group Chat Integration**: Add to any WhatsApp group
+- **@Mention Activation**: Cost-effective, only responds when mentioned
+- **Multi-Turn Conversations**: Remembers conversation history
+- **Multi-User Support**: Isolated conversations per user
+- **Twilio Integration**: Production-ready WhatsApp API
+- **PostgreSQL History**: Persistent conversation storage
 
 ### Chatbot
 - **Web UI**: Beautiful Streamlit interface
