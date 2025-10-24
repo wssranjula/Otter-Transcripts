@@ -1,0 +1,20 @@
+# ReAct Agent Requirements
+# For intelligent multi-modal knowledge graph querying
+
+# Core LangGraph dependencies
+langgraph>=0.2.0
+langchain>=0.3.0
+langchain-core>=0.3.0
+langchain-mistralai>=0.2.0
+
+# Existing dependencies (should already be installed)
+neo4j>=5.14.0
+fastapi>=0.104.0
+uvicorn>=0.24.0
+twilio>=8.10.0
+psycopg2-binary>=2.9.9
+
+# Optional but recommended
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+
