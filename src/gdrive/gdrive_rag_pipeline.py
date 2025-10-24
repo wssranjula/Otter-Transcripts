@@ -568,7 +568,7 @@ class GoogleDriveRAGPipeline:
             self.unified_loader.close()
 
 
-def main():
+def  main():
     """Main entry point"""
     print("="*70)
     print("GOOGLE DRIVE TO RAG PIPELINE")
