@@ -7,8 +7,8 @@ from chatbot import RAGChatbot
 # Configuration
 NEO4J_URI = "bolt://220210fe.databases.neo4j.io:7687"
 NEO4J_USER = "neo4j"
-NEO4J_PASSWORD = "uefo7_cCO4KdvrpS3knrhJ39Pwn2KDrFD0NCH4SKHv8"
-MISTRAL_API_KEY = "xELPoQf6Msav4CZ7fPEAfcKnJTa4UOxn"
+NEO4J_PASSWORD = "YOUR_NEO4J_PASSWORD_HERE"  # Get from config.json
+MISTRAL_API_KEY = "YOUR_MISTRAL_API_KEY_HERE"  # Get from config.json
 
 print("="*70)
 print("CHATBOT TEST - Sample Questions")

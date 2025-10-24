@@ -57,7 +57,7 @@ Edit `config/gdrive_config.json` and add Postgres settings:
   
   "postgres": {
     "enabled": true,
-    "connection_string": "postgresql://neondb_owner:npg_6KSl1NxGfUFJ@ep-small-bread-ahypa4ag-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+    "connection_string": "postgresql://username:password@your-host.neon.tech/database?sslmode=require&channel_binding=require"
   },
   
   "embeddings": {

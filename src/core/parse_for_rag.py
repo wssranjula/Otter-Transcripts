@@ -384,7 +384,7 @@ def main():
 
     TRANSCRIPT_DIR = r"C:\Users\Admin\Desktop\Suresh\Otter Transcripts\transcripts"
     OUTPUT_FILE = r"C:\Users\Admin\Desktop\Suresh\Otter Transcripts\knowledge_graph_rag.json"
-    MISTRAL_API_KEY = 'xELPoQf6Msav4CZ7fPEAfcKnJTa4UOxn'
+    MISTRAL_API_KEY = 'YOUR_MISTRAL_API_KEY_HERE'  # Get from config.json
     MODEL = "mistral-large-latest"
 
     print("="*70)

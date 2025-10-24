@@ -155,7 +155,7 @@ Send to Twilio sandbox number:
 ```json
 {
   "mistral": {
-    "api_key": "xELPoQf6Msav4CZ7fPEAfcKnJTa4UOxn",
+    "api_key": "YOUR_MISTRAL_API_KEY_HERE",
     "model": "mistral-small-latest"
   },
   

@@ -173,14 +173,14 @@ CALL db.index.fulltext.queryNodes('chunk_text', $search_text)
 
 ### Neo4j Connection
 ```python
-NEO4J_URI = "bolt://220210fe.databases.neo4j.io:7687"
+NEO4J_URI = "bolt://YOUR_NEO4J_INSTANCE.databases.neo4j.io:7687"
 NEO4J_USER = "neo4j"
-NEO4J_PASSWORD = "uefo7_cCO4KdvrpS3knrhJ39Pwn2KDrFD0NCH4SKHv8"
+NEO4J_PASSWORD = "YOUR_NEO4J_PASSWORD_HERE"
 ```
 
 ### Mistral API
 ```python
-MISTRAL_API_KEY = "xELPoQf6Msav4CZ7fPEAfcKnJTa4UOxn"
+MISTRAL_API_KEY = "YOUR_MISTRAL_API_KEY_HERE"
 MODEL = "mistral-large-latest"
 ```
 

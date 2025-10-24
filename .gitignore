@@ -34,6 +34,12 @@ gdrive_state.json
 config/knowledge_graph*.json
 knowledge_graph*.json
 
+# Log files (may contain secrets)
+*.log
+*.log.*
+unified_agent.log
+whatsapp_agent.log
+
 # Temporary files
 gdrive_transcripts/
 *.pyc

@@ -1,7 +1,7 @@
 from rag_queries import RAGQueryHelper
 import json
 
-rag = RAGQueryHelper('bolt://220210fe.databases.neo4j.io:7687', 'neo4j', 'uefo7_cCO4KdvrpS3knrhJ39Pwn2KDrFD0NCH4SKHv8')
+rag = RAGQueryHelper('bolt://220210fe.databases.neo4j.io:7687', 'neo4j', 'YOUR_NEO4J_PASSWORD_HERE')
 
 with rag.driver.session() as s:
     result = s.run('MATCH (m:Meeting) RETURN m.title, m.date ORDER BY m.date DESC')

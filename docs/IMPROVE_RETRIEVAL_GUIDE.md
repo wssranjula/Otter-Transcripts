@@ -4,7 +4,7 @@ from rag_queries import RAGQueryHelper
 rag = RAGQueryHelper(
     'bolt://220210fe.databases.neo4j.io:7687',
     'neo4j',
-    'uefo7_cCO4KdvrpS3knrhJ39Pwn2KDrFD0NCH4SKHv8'
+    'YOUR_NEO4J_PASSWORD_HERE'
 )
 
 print("Analyzing importance scores...")

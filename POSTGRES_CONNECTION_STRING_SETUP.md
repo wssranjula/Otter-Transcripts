@@ -9,8 +9,10 @@ The Postgres mirror database now supports **connection strings** (recommended) a
 ## Your Connection String
 
 ```
-postgresql://neondb_owner:npg_6KSl1NxGfUFJ@ep-small-bread-ahypa4ag-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+postgresql://username:password@your-host.neon.tech/database?sslmode=require&channel_binding=require
 ```
+
+**Replace with your actual Neon connection string from your Neon dashboard.**
 
 **Already configured in:** `config/config.json`
 
@@ -26,7 +28,7 @@ Edit `config/config.json`:
 {
   "postgres": {
     "enabled": true,
-    "connection_string": "postgresql://neondb_owner:npg_6KSl1NxGfUFJ@ep-small-bread-ahypa4ag-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+    "connection_string": "postgresql://username:password@your-host.neon.tech/database?sslmode=require&channel_binding=require"
   },
   
   "embeddings": {
@@ -89,10 +91,10 @@ If you prefer, you can still use individual parameters:
 {
   "postgres": {
     "enabled": true,
-    "host": "ep-small-bread-ahypa4ag-pooler.c-3.us-east-1.aws.neon.tech",
-    "database": "neondb",
-    "user": "neondb_owner",
-    "password": "npg_6KSl1NxGfUFJ",
+    "host": "your-host.neon.tech",
+    "database": "your_database",
+    "user": "your_username",
+    "password": "your_password",
     "port": 5432
   }
 }
@@ -109,8 +111,8 @@ Quick test script:
 ```python
 from src.core.postgres_loader import UnifiedPostgresLoader
 
-# Your connection string
-conn_str = "postgresql://neondb_owner:npg_6KSl1NxGfUFJ@ep-small-bread-ahypa4ag-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+# Your connection string (get from Neon dashboard)
+conn_str = "postgresql://username:password@your-host.neon.tech/database?sslmode=require&channel_binding=require"
 
 # Test connection
 loader = UnifiedPostgresLoader(connection_string=conn_str)
@@ -170,7 +172,7 @@ Your password in the connection string **will be masked** in logs:
 
 **Connection string:**
 ```
-postgresql://neondb_owner:npg_6KSl1NxGfUFJ@ep-small-bread-ahypa4ag-pooler...
+postgresql://username:password@your-host.neon.tech...
 ```
 
 **Displayed in logs as:**
