@@ -9,11 +9,18 @@ from typing import Dict, List
 import ssl
 import certifi
 
+# Import confidentiality detector (optional)
+try:
+    from src.core.confidentiality_detector import ConfidentialityDetector
+    CONFIDENTIALITY_DETECTION = True
+except ImportError:
+    CONFIDENTIALITY_DETECTION = False
+
 
 class RAGNeo4jLoader:
     """Load RAG-optimized knowledge graph"""
 
-    def __init__(self, uri: str, user: str, password: str):
+    def __init__(self, uri: str, user: str, password: str, auto_detect_confidentiality: bool = True):
         # For bolt+s:// URIs with Aura, we need to use certifi certificates
         # Create SSL context with certifi bundle
         ssl_context = ssl.create_default_context(cafile=certifi.where())
@@ -25,6 +32,14 @@ class RAGNeo4jLoader:
             ssl_context=ssl_context
         )
         print(f"[OK] Connected to Neo4j at {uri}")
+        
+        # Initialize confidentiality detector
+        self.auto_detect = auto_detect_confidentiality and CONFIDENTIALITY_DETECTION
+        if self.auto_detect:
+            self.detector = ConfidentialityDetector()
+            print("[OK] Automatic confidentiality detection enabled")
+        else:
+            self.detector = None
 
     def close(self):
         self.driver.close()
@@ -108,15 +123,37 @@ class RAGNeo4jLoader:
 
         with self.driver.session() as session:
             for t in transcripts:
-                meeting = t['meeting']
+                meeting = t['meeting'].copy()
+                
+                # Auto-detect confidentiality if enabled
+                if self.auto_detect and self.detector:
+                    enriched = self.detector.enrich_meeting(meeting)
+                    detected_conf = enriched['confidentiality_level']
+                    detected_status = 'FINAL'  # Always FINAL - no drafts in this workflow
+                    detected_tags = enriched['tags']
+                else:
+                    detected_conf = 'INTERNAL'
+                    detected_status = 'FINAL'  # Always FINAL - no drafts in this workflow
+                    detected_tags = []
+                
                 session.run("""
                     MERGE (m:Meeting {id: $id})
                     SET m.title = $title,
                         m.date = $date,
                         m.category = $category,
                         m.participants = $participants,
-                        m.transcript_file = $transcript_file
-                """, **meeting)
+                        m.transcript_file = $transcript_file,
+                        m.tags = COALESCE(m.tags, $detected_tags),
+                        m.confidentiality_level = COALESCE(m.confidentiality_level, $detected_conf),
+                        m.document_status = COALESCE(m.document_status, $detected_status),
+                        m.created_date = COALESCE(m.created_date, date($date)),
+                        m.last_modified_date = date($date)
+                """, 
+                    detected_conf=detected_conf,
+                    detected_status=detected_status,
+                    detected_tags=detected_tags,
+                    **meeting
+                )
 
         print(f"  [OK] {len(transcripts)} meetings")
 
@@ -175,7 +212,12 @@ class RAGNeo4jLoader:
                             c.importance_score = $importance_score,
                             c.meeting_id = $meeting_id,
                             c.meeting_title = $meeting_title,
-                            c.meeting_date = $meeting_date
+                            c.meeting_date = $meeting_date,
+                            c.tags = COALESCE(c.tags, []),
+                            c.confidentiality_level = COALESCE(c.confidentiality_level, 'INTERNAL'),
+                            c.document_status = COALESCE(c.document_status, 'FINAL'),
+                            c.created_date = COALESCE(c.created_date, date($meeting_date)),
+                            c.last_modified_date = date($meeting_date)
                     """, **chunk)
 
                     # Link to meeting (PART_OF)

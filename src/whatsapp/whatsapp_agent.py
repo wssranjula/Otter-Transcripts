@@ -12,7 +12,7 @@ import json
 
 from src.whatsapp.twilio_client import TwilioWhatsAppClient
 from src.whatsapp.conversation_manager import ConversationManager
-from src.chatbot.chatbot import RAGChatbot
+from src.agents.sybil_agent import SybilAgent
 
 logger = logging.getLogger(__name__)
 
@@ -45,24 +45,29 @@ class WhatsAppAgent:
             max_history=max_history
         )
         
-        # Initialize RAG chatbot
+        # Initialize Sybil agent
         neo4j_config = config['neo4j']
         mistral_key = config.get('mistral', {}).get('api_key', '')
         mistral_model = config.get('mistral', {}).get('model', 'mistral-small-latest')
         
-        self.rag_chatbot = RAGChatbot(
+        self.sybil_agent = SybilAgent(
             neo4j_uri=neo4j_config['uri'],
             neo4j_user=neo4j_config['user'],
             neo4j_password=neo4j_config['password'],
             mistral_api_key=mistral_key,
+            config=config,
             model=mistral_model
         )
         
         # Bot configuration
+        whatsapp_config = config.get('whatsapp', {})
         self.trigger_words = twilio_config.get('bot_trigger_words', ['@agent', '@bot'])
-        self.context_limit = config.get('whatsapp', {}).get('context_limit', 5)
-        self.enable_group_chat = config.get('whatsapp', {}).get('enable_group_chat', True)
-        self.response_timeout = config.get('whatsapp', {}).get('response_timeout_seconds', 30)
+        self.context_limit = whatsapp_config.get('context_limit', 5)
+        self.enable_group_chat = whatsapp_config.get('enable_group_chat', True)
+        self.response_timeout = whatsapp_config.get('response_timeout_seconds', 30)
+        self.max_message_length = whatsapp_config.get('max_message_length', 1500)
+        self.auto_split_messages = whatsapp_config.get('auto_split_long_messages', True)
+        self.prefer_concise = whatsapp_config.get('prefer_concise_responses', True)
         
         logger.info("WhatsApp Agent initialized successfully")
         logger.info(f"Trigger words: {self.trigger_words}")
@@ -121,10 +126,29 @@ class WhatsAppAgent:
             logger.info("Bot not mentioned, ignoring message")
             return None
 
+        # Check for special commands
+        message_lower = message_body.lower()
+        
+        # Handle HELP command
+        if 'help' in message_lower:
+            help_msg = self.config.get('sybil', {}).get('help_message', 
+                "I'm Sybil, your Climate Hub assistant. Ask me about meetings, decisions, and documents.")
+            return help_msg
+        
+        # Handle STOP command (acknowledge but don't actually stop - Twilio handles this)
+        if message_lower.strip() == 'stop':
+            return "You've been unsubscribed from Sybil updates. Text START to re-subscribe."
+        
+        # Handle START/OPTIN command
+        if 'start' in message_lower or 'optin' in message_lower:
+            optin_msg = self.config.get('sybil', {}).get('optin_message',
+                "Welcome to Sybil, Climate Hub's internal assistant!")
+            return optin_msg
+        
         # Extract question
         question = self.extract_question(message_body)
         if not question:
-            return "Hi! I'm your RAG assistant. Please ask me a question about your meetings or documents."
+            return "Hi! I'm Sybil, Climate Hub's internal assistant. Please ask me a question about your meetings or documents."
 
         logger.info(f"Processing question: {question}")
 
@@ -170,72 +194,127 @@ class WhatsAppAgent:
 
     def _generate_answer(self, question: str, conversation_context: str) -> str:
         """
-        Generate answer using RAG chatbot (runs in thread pool)
+        Generate answer using Sybil agent (runs in thread pool)
 
         Args:
             question: User's question
             conversation_context: Previous conversation context
 
         Returns:
-            str: Generated answer
+            str: Generated answer with citations and warnings
         """
-        # Search Neo4j using only the current question (avoid Lucene special chars in context)
-        # The RAG system will retrieve relevant chunks based on the question
-        rag_context = self.rag_chatbot.rag.build_rag_context(
-            query=question,
-            limit=self.context_limit
-        )
+        # Add concise prompt if configured
+        concise_prompt = ""
+        if self.prefer_concise:
+            concise_prompt = f"\n\nIMPORTANT: Keep response concise for WhatsApp (under {self.max_message_length} characters if possible). Use Smart Brevity: short paragraphs, bullet points, key highlights only."
         
-        # Build the final prompt with conversation history and RAG context
+        # Build context-aware question if there's conversation history
         if conversation_context:
-            full_prompt = f"""Previous conversation:
+            enhanced_question = f"""Previous conversation context:
 {conversation_context}
 
 Current question: {question}
 
-{rag_context}
-
-Please answer the current question using the context provided above. If referring to previous conversation, be coherent with what was discussed."""
+Please answer considering the conversation context above.{concise_prompt}"""
         else:
-            full_prompt = f"""{rag_context}
+            enhanced_question = f"""{question}{concise_prompt}"""
+        
+        # Use Sybil agent to answer (includes all smart features)
+        answer = self.sybil_agent.query(enhanced_question, verbose=False)
+        
+        return answer
 
-Current question: {question}"""
+    def split_message(self, message: str, max_length: int = 1500) -> list:
+        """
+        Split long message into chunks that fit WhatsApp's character limit
         
-        # Generate answer using Mistral with the combined context
-        from langchain_core.messages import HumanMessage, SystemMessage
+        Args:
+            message: The full message to split
+            max_length: Maximum characters per message (default 1500 for safety margin)
+            
+        Returns:
+            List of message chunks
+        """
+        # If message fits, return as-is
+        if len(message) <= max_length:
+            return [message]
         
-        system_prompt = """You are a helpful AI assistant that answers questions based on meeting transcripts.
-
-INSTRUCTIONS:
-- Answer questions using ONLY the provided context from meeting transcripts
-- Quote specific statements when possible, citing the speaker
-- If the context doesn't contain enough information, say so clearly
-- Be concise but thorough
-- Include relevant dates and meeting names when available
-- If you're unsure, acknowledge the uncertainty
-
-Do not make up information or use knowledge outside the provided context."""
+        chunks = []
+        current_chunk = ""
         
-        messages = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=full_prompt)
-        ]
+        # Split by paragraphs first (double newline)
+        paragraphs = message.split('\n\n')
         
-        response = self.rag_chatbot.llm.invoke(messages)
-        return response.content
+        for para in paragraphs:
+            # If adding this paragraph exceeds limit, save current chunk and start new one
+            if len(current_chunk) + len(para) + 2 > max_length:
+                if current_chunk:
+                    chunks.append(current_chunk.strip())
+                    current_chunk = ""
+                
+                # If paragraph itself is too long, split by sentences
+                if len(para) > max_length:
+                    sentences = para.split('. ')
+                    for sentence in sentences:
+                        if len(current_chunk) + len(sentence) + 2 > max_length:
+                            if current_chunk:
+                                chunks.append(current_chunk.strip())
+                            current_chunk = sentence + '. '
+                        else:
+                            current_chunk += sentence + '. '
+                else:
+                    current_chunk = para + '\n\n'
+            else:
+                current_chunk += para + '\n\n'
+        
+        # Add remaining chunk
+        if current_chunk.strip():
+            chunks.append(current_chunk.strip())
+        
+        # Add part indicators if split into multiple messages
+        if len(chunks) > 1:
+            numbered_chunks = []
+            for i, chunk in enumerate(chunks, 1):
+                numbered_chunks.append(f"[Part {i}/{len(chunks)}]\n\n{chunk}")
+            return numbered_chunks
+        
+        return chunks
 
     async def send_response(self, to: str, message: str) -> bool:
         """
-        Send response via Twilio
+        Send response via Twilio (handles long messages by splitting)
 
         Args:
             to: Recipient phone number
             message: Response message
 
         Returns:
-            bool: True if sent successfully
+            bool: True if all parts sent successfully
         """
-        return self.twilio_client.send_message(to, message)
+        # Split message if too long and auto-split is enabled
+        if self.auto_split_messages:
+            message_chunks = self.split_message(message, max_length=self.max_message_length)
+        else:
+            # Truncate if auto-split is disabled
+            if len(message) > self.max_message_length:
+                message = message[:self.max_message_length - 50] + "\n\n...(message truncated)"
+            message_chunks = [message]
+        
+        all_success = True
+        for i, chunk in enumerate(message_chunks):
+            success = self.twilio_client.send_message(to, chunk)
+            if not success:
+                all_success = False
+                logger.error(f"Failed to send message part {i+1}/{len(message_chunks)}")
+            
+            # Small delay between messages to maintain order
+            if i < len(message_chunks) - 1:
+                await asyncio.sleep(0.5)
+        
+        if len(message_chunks) > 1:
+            logger.info(f"Sent response in {len(message_chunks)} parts")
+        
+        return all_success
 
     def validate_request(self, url: str, params: dict, signature: str) -> bool:
         """
@@ -261,7 +340,7 @@ Do not make up information or use knowledge outside the provided context."""
     def close(self):
         """Cleanup resources"""
         self.conversation_manager.close()
-        self.rag_chatbot.close()
+        self.sybil_agent.close()
         logger.info("WhatsApp Agent closed")
 
 
