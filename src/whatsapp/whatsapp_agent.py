@@ -121,6 +121,24 @@ class WhatsAppAgent:
         
         logger.info(f"Received message from {profile_name} ({user_phone}): {message_body[:100]}")
 
+        # Check whitelist if enabled
+        whatsapp_config = self.config.get('whatsapp', {})
+        if whatsapp_config.get('whitelist_enabled', False):
+            authorized_numbers = whatsapp_config.get('authorized_numbers', [])
+            blocked_numbers = whatsapp_config.get('blocked_numbers', [])
+            
+            # Check if number is blocked
+            if user_phone in blocked_numbers or from_number in blocked_numbers:
+                logger.warning(f"Blocked number attempted to contact bot: {user_phone}")
+                return "You have been blocked from using this service."
+            
+            # Check if number is authorized
+            if user_phone not in authorized_numbers and from_number not in authorized_numbers:
+                logger.warning(f"Unauthorized number attempted to contact bot: {user_phone}")
+                unauthorized_message = whatsapp_config.get('unauthorized_message', 
+                    "Sorry, you are not authorized to use this bot. Please contact an administrator for access.")
+                return unauthorized_message
+
         # Check if bot is mentioned
         if not self.is_bot_mentioned(message_body):
             logger.info("Bot not mentioned, ignoring message")

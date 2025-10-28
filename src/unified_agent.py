@@ -8,6 +8,7 @@ import asyncio
 from typing import Optional, Dict
 from fastapi import FastAPI, Request, Response, BackgroundTasks, HTTPException
 from fastapi.responses import PlainTextResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,18 @@ except ImportError as e:
     GDRIVE_AVAILABLE = False
     GoogleDriveRAGPipeline = None
     BackgroundGDriveMonitor = None
+
+# Import Admin components
+try:
+    from src.admin.admin_api import router as admin_router, init_admin_api
+    from src.admin.auth import init_admin_auth
+    ADMIN_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"Admin components not available: {e}")
+    ADMIN_AVAILABLE = False
+    admin_router = None
+    init_admin_api = None
+    init_admin_auth = None
 
 
 def create_unified_app(config: dict) -> FastAPI:
@@ -72,6 +85,7 @@ def create_unified_app(config: dict) -> FastAPI:
     # Check which services are enabled
     whatsapp_enabled = config.get('services', {}).get('whatsapp', {}).get('enabled', True)
     gdrive_enabled = config.get('services', {}).get('gdrive_monitor', {}).get('enabled', True)
+    admin_enabled = config.get('services', {}).get('admin', {}).get('enabled', True)
 
     # Check availability
     if whatsapp_enabled and not WHATSAPP_AVAILABLE:
@@ -84,7 +98,12 @@ def create_unified_app(config: dict) -> FastAPI:
         logger.error("Install with: pip install -r requirements_gdrive.txt")
         gdrive_enabled = False
 
-    logger.info(f"Services configuration: WhatsApp={whatsapp_enabled}, GDrive={gdrive_enabled}")
+    if admin_enabled and not ADMIN_AVAILABLE:
+        logger.error("Admin service enabled but dependencies not installed")
+        logger.error("Install with: pip install -r requirements.txt")
+        admin_enabled = False
+
+    logger.info(f"Services configuration: WhatsApp={whatsapp_enabled}, GDrive={gdrive_enabled}, Admin={admin_enabled}")
 
     # Initialize WhatsApp Agent (if enabled)
     whatsapp_agent: Optional[WhatsAppAgent] = None
@@ -133,6 +152,38 @@ def create_unified_app(config: dict) -> FastAPI:
             logger.error(f"Failed to initialize Google Drive Monitor: {e}", exc_info=True)
             if config.get('services', {}).get('gdrive_monitor', {}).get('required', False):
                 raise
+
+    # Initialize Admin API (if enabled)
+    if admin_enabled and ADMIN_AVAILABLE:
+        try:
+            logger.info("Initializing Admin API...")
+            init_admin_auth(config)
+            init_admin_api(config)
+            logger.info("[OK] Admin API initialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize Admin API: {e}", exc_info=True)
+            if config.get('services', {}).get('admin', {}).get('required', False):
+                raise
+
+    # Add CORS middleware for admin panel
+    if admin_enabled and ADMIN_AVAILABLE:
+        # Get allowed origins from config
+        allowed_origins = config.get('admin', {}).get('allowed_origins', [
+            "http://localhost:3000",  # Local development
+            "https://*.vercel.app",   # Vercel deployments
+        ])
+        
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=allowed_origins,
+            allow_credentials=True,
+            allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            allow_headers=["*"],
+        )
+        
+        # Mount admin routes
+        app.include_router(admin_router)
+        logger.info(f"[OK] Admin routes mounted with CORS for origins: {allowed_origins}")
 
     # Startup event
     @app.on_event("startup")
@@ -194,7 +245,8 @@ def create_unified_app(config: dict) -> FastAPI:
             "version": "1.0.0",
             "services": {
                 "whatsapp": whatsapp_enabled,
-                "gdrive_monitor": gdrive_enabled
+                "gdrive_monitor": gdrive_enabled,
+                "admin": admin_enabled
             },
             "endpoints": {
                 "health": "/health",
@@ -202,7 +254,9 @@ def create_unified_app(config: dict) -> FastAPI:
                 "redoc": "/redoc",
                 "whatsapp": "/whatsapp/webhook" if whatsapp_enabled else None,
                 "gdrive_status": "/gdrive/status" if gdrive_enabled else None,
-                "gdrive_trigger": "/gdrive/trigger" if gdrive_enabled else None
+                "gdrive_trigger": "/gdrive/trigger" if gdrive_enabled else None,
+                "admin_login": "/admin/login" if admin_enabled else None,
+                "admin_config": "/admin/config/sybil-prompt" if admin_enabled else None
             }
         }
 

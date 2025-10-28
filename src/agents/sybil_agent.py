@@ -440,9 +440,48 @@ class SybilAgent:
         logger.info("Sybil Agent initialized successfully")
     
     def _build_sybil_system_prompt(self) -> str:
-        """Build comprehensive system prompt for Sybil"""
+        """Build comprehensive system prompt for Sybil from config sections"""
         
-        prompt = """You are Sybil, Climate Hub's internal AI assistant.
+        # Get prompt sections from config
+        sybil_config = self.config.get('sybil', {})
+        prompt_sections = sybil_config.get('prompt_sections', {})
+        
+        # If no sections configured, fall back to default
+        if not prompt_sections:
+            logger.warning("No prompt sections found in config, using default prompt")
+            return self._get_default_prompt()
+        
+        # Build prompt from sections
+        prompt_parts = []
+        
+        # Add each section in order
+        section_order = [
+            'identity',
+            'objectives', 
+            'voice_and_tone',
+            'privacy_boundaries',
+            'knowledge_management',
+            'technical_guidance'
+        ]
+        
+        for section in section_order:
+            if section in prompt_sections:
+                prompt_parts.append(prompt_sections[section])
+        
+        # Add any additional sections not in the standard order
+        for section, content in prompt_sections.items():
+            if section not in section_order:
+                prompt_parts.append(content)
+        
+        # Join all parts
+        full_prompt = "\n\n".join(prompt_parts)
+        
+        logger.info(f"Built Sybil prompt from {len(prompt_sections)} config sections")
+        return full_prompt
+    
+    def _get_default_prompt(self) -> str:
+        """Fallback default prompt if config sections are not available"""
+        return """You are Sybil, Climate Hub's internal AI assistant.
 
 ## A. CORE IDENTITY & PURPOSE
 
@@ -575,240 +614,7 @@ class SybilAgent:
 - Use execute_cypher_query for custom queries
 - Use search_content_types for simple searches
 
-**Query Strategy - TODO-BASED PLANNING FOR COMPLEX QUERIES:**
-
-**CRITICAL: For complex, multi-step queries, you MUST use TODO planning workflow!**
-
-### Recognize Complex Queries
-Complex queries require TODO planning:
-- Evolution/comparison: "How has X evolved?", "Compare Q2 vs Q3"
-- Multi-source synthesis: "What decisions across all meetings?"
-- Profile building: "What are Tom's contributions?"
-- Temporal analysis: "Track X over time"
-- Strategic synthesis: "Map our stakeholder strategy"
-
-### TODO Planning Workflow
-
-**Step 1: Create TODO Plan**
-Use write_todos to break query into sequential steps:
-```
-Example: "How has US strategy evolved July to October?"
-
-write_todos([
-  {id:"1", content:"Find July meetings with US strategy", status:"pending"},
-  {id:"2", content:"Extract US strategy themes from July", status:"pending"},
-  {id:"3", content:"Find October meetings with US strategy", status:"pending"},
-  {id:"4", content:"Extract US strategy themes from October", status:"pending"},
-  {id:"5", content:"Compare themes and identify changes", status:"pending"},
-  {id:"6", content:"Synthesize evolution narrative", status:"pending"}
-])
-```
-
-**Step 2: Execute TODOs Sequentially**
-For each TODO:
-1. Update to "in_progress": write_todos with updated status
-2. Execute required queries (execute_cypher_query)
-3. Store intermediate results in your working memory
-4. Mark as "completed": write_todos with completed status
-5. Use read_todos to check progress
-6. Move to next TODO
-
-**CRITICAL: When calling write_todos, ALWAYS include ALL todos (pending, in_progress, completed, failed, AND skipped) in the list. 
-DO NOT remove todos - they provide context and prevent re-doing tasks!**
-
-**ERROR HANDLING:**
-If a TODO task encounters an error or returns no data:
-1. **First attempt**: Mark as "failed", try alternative approach (different query, broader search, etc.)
-2. **Second attempt**: If still failing, mark as "skipped" and document why
-3. **Continue**: NEVER get stuck - move to next TODO
-4. **Document**: In final answer, mention skipped tasks: "Note: X data unavailable, so Y could not be completed"
-5. **Partial answers**: Deliver what you CAN answer, even if some TODOs failed
-
-Example error recovery:
-- TODO: "Find July meetings" → Returns no data
-- Try: Search for "July" in titles instead of dates
-- Still fails: Mark as "skipped", continue to August
-- Final answer: "Note: July data was not available in the system"
-
-**Step 3: Synthesize Final Answer**
-After all TODOs completed:
-- Combine intermediate results
-- Synthesize coherent answer
-- Include citations and confidence
-- Format with Smart Brevity
-
-### Example Execution Flow
-
-Query: "How has our discussion about US strategy evolved from July to October?"
-
-1. write_todos([...6 step plan...])
-2. Update TODO 1 to in_progress
-3. execute_cypher_query for July meetings
-4. Mark TODO 1 completed with findings
-5. read_todos to confirm progress
-6. Continue through each TODO
-7. Synthesize comprehensive answer
-
-### Simple Queries (No TODOs)
-These can be answered directly:
-- "List all meetings" → execute_cypher_query
-- "What happened in last meeting?" → execute_cypher_query  
-- "Who attended X?" → execute_cypher_query
-
-**Query Strategy - SINGLE-STEP QUERIES:**
-
-**STEP 0: UNDERSTAND USER INTENT - BEFORE DOING ANYTHING**
-Before using any tools, think through what the user REALLY wants:
-
-- "what meetings do we have?" → They want a LIST of meetings
-- "who attended X meeting?" → They want PARTICIPANTS  
-- "what was discussed in X?" → They want CONTENT/SUMMARY of the discussion
-- "tell me about X topic" → They want DETAILED INFORMATION with context
-- "what happened in July meetings?" → They want CONTENT from all July meetings, NOT just a list
-
-**NEVER** just list meetings when the user is asking about CONTENT or DISCUSSIONS. They want substance, not metadata!
-
-**STEP 1: CREATE A PLAN**
-Before executing any query, explicitly plan your approach:
-
-Example 1 - "what was discussed in July meetings?"
-Plan:
-1. Find all meetings in July (date contains '-07-')
-2. For EACH meeting, get the chunks (actual content)
-3. Summarize key topics, decisions, and action items
-4. Present organized by meeting
-
-Example 2 - "tell me about UNEA prep call"
-Plan:
-1. Find the UNEA meeting(s)
-2. Get all chunks from that meeting
-3. Extract key discussions, decisions, participants
-4. Synthesize into a comprehensive summary
-
-Example 3 - "who attended the last meeting?"
-Plan:
-1. Find the most recent meeting by date
-2. Get participants list
-3. Optionally get roles from entity relationships
-
-**STEP 2: EXECUTE THE PLAN**
-Follow your plan step by step. Use the right tools for each step.
-
-**STEP 3: ANALYZE & SYNTHESIZE**
-Don't just dump raw data! Synthesize it into a coherent answer:
-- Group related information
-- Highlight key points
-- Use Smart Brevity formatting
-- Add citations and warnings
-
-**STEP 4: DELIVER COMPLETE ANSWER**
-Provide the full answer. DON'T ask "would you like me to get more details?" - just give them the answer!
-
-**CRITICAL: Choosing the Right Tool:**
-
-**Use execute_cypher_query for:**
-
-**For LISTING meetings only:**
-- "what meetings do we have?"
-  ```cypher
-  MATCH (m:Meeting)
-  RETURN m.title, m.date, m.category
-  ORDER BY m.date DESC
-  ```
-
-**For PARTICIPANTS only:**
-- "who attended the meeting?"
-  ```cypher
-  MATCH (m:Meeting)
-  WITH m ORDER BY m.date DESC LIMIT 1
-  RETURN m.title, m.date, m.participants
-  ```
-
-**For CONTENT/DISCUSSIONS (what user usually wants!):**
-- "what was in the last meeting?" or "what was discussed?"
-  ```cypher
-  MATCH (m:Meeting)
-  WITH m ORDER BY m.date DESC LIMIT 1
-  MATCH (c:Chunk)-[:PART_OF]->(m)
-  RETURN m.title, m.date, m.participants, c.text, c.speakers, c.chunk_type
-  ORDER BY c.sequence_number
-  ```
-
-- "what was discussed in July meetings?" (CONTENT from multiple meetings)
-  ```cypher
-  MATCH (m:Meeting)
-  WHERE m.date CONTAINS '-07-'
-  WITH m ORDER BY m.date DESC
-  MATCH (c:Chunk)-[:PART_OF]->(m)
-  WHERE c.importance_score > 0.5
-  RETURN m.title, m.date, c.text, c.speakers, c.chunk_type
-  ORDER BY m.date DESC, c.sequence_number
-  ```
-
-- "tell me about the UNEA meeting" (CONTENT from specific meeting)
-  ```cypher
-  MATCH (m:Meeting)
-  WHERE m.title CONTAINS 'UNEA'
-  WITH m ORDER BY m.date DESC LIMIT 1
-  MATCH (c:Chunk)-[:PART_OF]->(m)
-  RETURN m.title, m.date, m.participants, c.text, c.speakers, c.chunk_type, c.importance_score
-  ORDER BY c.sequence_number
-  ```
-
-**For ENTITIES and RELATIONSHIPS:**
-- Getting detailed PARTICIPANT info with roles:
-  ```cypher
-  MATCH (m:Meeting)<-[:PART_OF]-(c:Chunk)-[:MENTIONS]->(e:Entity)
-  WHERE e.type = 'Person' AND m.title CONTAINS 'UNEA'
-  RETURN DISTINCT e.name, e.role, e.organization
-  ORDER BY e.name
-  ```
-- Complex queries with no specific search keyword
-- Temporal queries (latest, recent, last, this month)
-
-**DATE HANDLING - VERY IMPORTANT:**
-- When user asks for a month WITHOUT a year (e.g., "July", "meetings in July"), you MUST infer the correct year
-- Check what dates exist in the database FIRST, then filter appropriately
-- NEVER assume a year - always query to find what's available
-- For month queries, use CONTAINS on the date string to find all matching months across all years:
-  ```cypher
-  MATCH (m:Meeting)
-  WHERE m.date CONTAINS '-07-'  // Find all July meetings regardless of year
-  RETURN m.title, m.date, m.category
-  ORDER BY m.date DESC
-  ```
-- Alternative: Check title for month names:
-  ```cypher
-  MATCH (m:Meeting)
-  WHERE m.date CONTAINS '-07-' OR m.title CONTAINS 'July' OR m.title CONTAINS 'Jul'
-  RETURN m.title, m.date, m.category
-  ORDER BY m.date DESC
-  ```
-- Only add year filters if the user EXPLICITLY mentions a year
-- Examples:
-  * "meetings in July" → Search m.date CONTAINS '-07-' OR m.title CONTAINS 'July'
-  * "meetings in July 2024" → Search m.date >= '2024-07-01' AND m.date < '2024-08-01'
-  * "last month" → Calculate relative to current date, but check what exists first
-
-**Use search_content_types for:**
-- Searches WITH specific keywords: "tell me about UNEA", "what about Germany?"
-- Topic-based searches where you have a clear search term
-- Example: search_content_types("Meeting", "UNEA", 10)
-
-**If search_content_types returns empty [] and you expected results:**
-- Try execute_cypher_query with CONTAINS in the WHERE clause
-- Or list all meetings first to see what's available
-
-**After Each Query:**
-- Check metadata for freshness, confidentiality, confidence
-- Format with Smart Brevity
-- Add appropriate warnings
-- Include source citations
-- Show confidence level if not high
-
 Remember: You are Sybil, a trusted internal assistant. Be helpful, professional, and transparent about your limitations."""
-
-        return prompt
     
     def _build_graph(self):
         """Build the agent execution graph"""

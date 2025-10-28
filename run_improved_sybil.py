@@ -1,14 +1,14 @@
 """
-Interactive Sybil Session
-Test Sybil agent with conversational interface
+Improved Interactive Sybil Session
+Uses the improved Sybil agent with better performance
 """
 
 import json
 import sys
-from src.agents.sybil_agent import SybilAgent
+from src.agents.improved_sybil_agent import ImprovedSybilAgent
 
 def main():
-    """Run interactive Sybil session"""
+    """Run improved interactive Sybil session"""
     
     # Load config
     try:
@@ -18,14 +18,14 @@ def main():
         print(f"❌ Failed to load config: {e}")
         return
     
-    # Initialize Sybil
+    # Initialize Improved Sybil
     print("\n" + "="*70)
-    print("SYBIL - Climate Hub's Internal AI Assistant")
+    print("IMPROVED SYBIL - Climate Hub's Internal AI Assistant")
     print("="*70)
-    print("\nInitializing Sybil...")
+    print("\nInitializing Improved Sybil...")
     
     try:
-        sybil = SybilAgent(
+        sybil = ImprovedSybilAgent(
             neo4j_uri=config['neo4j']['uri'],
             neo4j_user=config['neo4j']['user'],
             neo4j_password=config['neo4j']['password'],
@@ -33,9 +33,9 @@ def main():
             config=config,
             model=config.get('mistral', {}).get('model', 'mistral-small-latest')
         )
-        print("✅ Sybil initialized successfully!\n")
+        print("✅ Improved Sybil initialized successfully!\n")
     except Exception as e:
-        print(f"❌ Failed to initialize Sybil: {e}")
+        print(f"❌ Failed to initialize Improved Sybil: {e}")
         return
     
     # Show introduction
@@ -76,9 +76,7 @@ def main():
             # Get Sybil's response
             print("\nSybil: ", end="", flush=True)
             response = sybil.query(user_input, verbose=verbose)
-            
-            if not verbose:  # If verbose, response already printed
-                print(response)
+            print(response)
         
         except KeyboardInterrupt:
             print("\n\nGoodbye!")
@@ -95,39 +93,31 @@ def main():
 def show_help():
     """Show example questions"""
     print("\n" + "="*70)
-    print("EXAMPLE QUESTIONS FOR SYBIL")
+    print("EXAMPLE QUESTIONS FOR IMPROVED SYBIL")
     print("="*70)
-    print("\n1. Identity & Capabilities:")
-    print("   - Who are you and what do you do?")
-    print("   - What can you help me with?")
+    print("\n1. Meeting Information:")
+    print("   - What meetings do you have access to?")
+    print("   - Tell me about the UNEA 7 Prep Call")
+    print("   - Show me recent meetings")
+    print("   - What was discussed in the All Hands call?")
     print()
-    print("2. Meeting Summaries:")
-    print("   - What was discussed in the last meeting?")
-    print("   - Summarize the Principals call from October")
-    print("   - What happened in the HAC Team meeting?")
+    print("2. Specific Topics:")
+    print("   - What was discussed about Germany?")
+    print("   - Tell me about funding decisions")
+    print("   - What strategy discussions happened?")
+    print("   - Show me action items from recent meetings")
     print()
-    print("3. Action Items:")
-    print("   - What action items were assigned to Sarah?")
-    print("   - Show me recent action items from October")
-    print("   - What tasks need to be completed?")
+    print("3. Decisions & Actions:")
+    print("   - What decisions were made in October?")
+    print("   - Who is responsible for UNEA preparation?")
+    print("   - What action items need follow-up?")
     print()
-    print("4. Decisions:")
-    print("   - What decisions were made about Germany?")
-    print("   - Show me all decisions from the last month")
-    print("   - Why was Germany deprioritized?")
-    print()
-    print("5. Information Retrieval:")
-    print("   - What's our current UNEA 7 strategy?")
-    print("   - Tell me about our international engagement")
-    print("   - What are we doing about climate research funding?")
-    print()
-    print("6. People & Roles:")
-    print("   - What did Tom Pravda say about Germany?")
-    print("   - Who is working on UK engagement?")
-    print("   - What is Sue Biniaz's background?")
+    print("4. Content Search:")
+    print("   - Search for 'climate research'")
+    print("   - Find discussions about 'SRM'")
+    print("   - Look for mentions of 'UNEP'")
     print("="*70)
 
 
 if __name__ == "__main__":
     main()
-
