@@ -1,0 +1,72 @@
+# Version Control
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+.hypothesis/
+
+# Documentation
+docs/_build/
+*.md
+
+# Logs
+*.log
+*.log.*
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Data directories (mount as volumes instead)
+gdrive_transcripts/
+data/transcripts/
+
+# Secrets and credentials (use environment variables)
+.env
+*.env
+config/credentials.json
+config/token.pickle
+config/gdrive_state.json
+config.json
+config/config.json
+config/gdrive_config.json
+
+# Generated data
+knowledge_graph*.json
+
+# Development tools
+.mypy_cache/
+.ruff_cache/
+
+# Archives
+archive_old_system/
+
+# Other
+*.bak
+*.tmp
+*.temp
+

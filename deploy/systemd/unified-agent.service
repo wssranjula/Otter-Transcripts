@@ -1,0 +1,38 @@
+[Unit]
+Description=Unified RAG Agent (WhatsApp + Google Drive + Sybil)
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=YOUR_USERNAME
+WorkingDirectory=/home/YOUR_USERNAME/Otter-Transcripts
+Environment="PATH=/home/YOUR_USERNAME/Otter-Transcripts/venv/bin"
+ExecStart=/home/YOUR_USERNAME/Otter-Transcripts/venv/bin/python run_unified_agent.py
+
+# Restart configuration
+Restart=always
+RestartSec=10
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+# Logging
+StandardOutput=append:/home/YOUR_USERNAME/unified-agent.log
+StandardError=append:/home/YOUR_USERNAME/unified-agent-error.log
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/YOUR_USERNAME/Otter-Transcripts/gdrive_transcripts
+ReadWritePaths=/home/YOUR_USERNAME/Otter-Transcripts/config
+ReadWritePaths=/home/YOUR_USERNAME
+
+# Resource limits
+MemoryMax=2G
+CPUQuota=200%
+
+[Install]
+WantedBy=multi-user.target
+

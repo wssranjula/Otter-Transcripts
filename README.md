@@ -15,39 +15,54 @@ python -m venv venv
 venv\Scripts\activate  # Windows
 # source venv/bin/activate  # Linux/Mac
 
-# Install dependencies
+# Install all dependencies (consolidated)
+pip install --upgrade pip
 pip install -r requirements.txt
-pip install -r requirements_gdrive.txt
-pip install -r requirements_whatsapp.txt
 ```
 
 ### 2. Configuration
-Edit `config/config.json` with your credentials:
-```json
-{
-  "mistral_api_key": "your-mistral-api-key",
-  "neo4j_uri": "bolt://localhost:7687",
-  "neo4j_user": "neo4j",
-  "neo4j_password": "your-password"
-}
+```bash
+# Copy environment template
+cp env.template .env
+
+# Edit .env with your credentials
+# Windows: notepad .env
+# Linux/Mac: nano .env
 ```
 
-### 3. Process Your Data
+Required environment variables:
 ```bash
-# Process transcripts and build knowledge graph
-python src/core/run_rag_pipeline.py
+NEO4J_URI=bolt://your-instance:7687
+NEO4J_PASSWORD=your-password
+MISTRAL_API_KEY=your-api-key
 ```
 
-### 4. Start the System
+### 3. Start the System
 ```bash
-# Start unified agent (includes WhatsApp, Google Drive, web interface)
+# Start unified agent (includes WhatsApp, Google Drive monitoring, Sybil agent)
 python run_unified_agent.py
 ```
 
+The system will automatically:
+- Initialize all enabled services
+- Start Google Drive monitoring (if configured)
+- Setup WhatsApp webhook endpoint (if configured)
+- Expose health check and API endpoints
+
+### 4. Verify It's Working
+```bash
+# Check health status
+curl http://localhost:8000/health
+
+# View API documentation
+# Open browser: http://localhost:8000/docs
+```
+
 ### 5. Use It
-- **Web Interface**: http://localhost:8000
-- **WhatsApp**: Set up Twilio integration (see User Guide)
-- **API**: Use Sybil agent directly in Python
+- **API Documentation**: http://localhost:8000/docs
+- **Health Check**: http://localhost:8000/health  
+- **WhatsApp**: Configure Twilio webhook (see [Deployment Guide](DEPLOYMENT_INFOMANIAK.md))
+- **Google Drive**: Monitors configured folder automatically
 
 ---
 
@@ -109,14 +124,19 @@ python run_unified_agent.py
 
 ## 🤖 Sybil - Your AI Assistant
 
-Sybil is Climate Hub's internal AI assistant that helps you:
+Sybil is Climate Hub's internal AI assistant powered by a **multi-agent architecture** with specialized sub-agents for optimal performance:
 
-### What Sybil Does
+- **Supervisor Agent**: Orchestrates complex queries, manages workflow, delegates to specialists
+- **Query Agent**: Executes database queries, returns concise summaries
+- **Analysis Agent**: Analyzes data, extracts themes and patterns
+
+Sybil helps you:
 - 📝 **Summarize meetings** from transcripts
 - 🔍 **Retrieve information** from all your documents
 - 🎯 **Track decisions and action items**
 - 📊 **Synthesize updates** across multiple sources
 - ✍️ **Support drafting** of strategy materials
+- 🧠 **Handle complex queries** by breaking them into sub-tasks
 
 ### How to Use Sybil
 

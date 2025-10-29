@@ -106,24 +106,19 @@ def create_unified_app(config: dict) -> FastAPI:
         try:
             logger.info("Initializing Google Drive Pipeline...")
             
-            # Get config file path
-            gdrive_config_file = config.get('services', {}).get('gdrive_monitor', {}).get(
-                'config_file', 'config/gdrive_config.json'
-            )
-            
-            # Initialize pipeline
-            gdrive_pipeline = GoogleDriveRAGPipeline(config_file=gdrive_config_file)
+            # Initialize pipeline with unified config
+            gdrive_pipeline = GoogleDriveRAGPipeline(config=config)
             
             # Setup Google Drive connection
             if not gdrive_pipeline.setup_google_drive():
                 logger.error("Failed to setup Google Drive connection")
-                if config.get('services', {}).get('gdrive_monitor', {}).get('required', False):
+                if config.get('services', {}).get('gdrive', {}).get('required', False):
                     raise Exception("Google Drive setup failed")
             
-            # Get monitoring interval
-            interval = config.get('services', {}).get('gdrive_monitor', {}).get(
-                'interval_seconds', 60
-            )
+            # Get monitoring interval from services config
+            interval = int(config.get('services', {}).get('gdrive', {}).get(
+                'monitor_interval_seconds', 60
+            ))
             
             # Create background monitor
             gdrive_monitor = BackgroundGDriveMonitor(gdrive_pipeline, interval_seconds=interval)
@@ -131,7 +126,7 @@ def create_unified_app(config: dict) -> FastAPI:
             
         except Exception as e:
             logger.error(f"Failed to initialize Google Drive Monitor: {e}", exc_info=True)
-            if config.get('services', {}).get('gdrive_monitor', {}).get('required', False):
+            if config.get('services', {}).get('gdrive', {}).get('required', False):
                 raise
 
     # Startup event
@@ -146,7 +141,7 @@ def create_unified_app(config: dict) -> FastAPI:
             logger.info("[OK] WhatsApp service ready")
         
         if gdrive_enabled and gdrive_monitor:
-            auto_start = config.get('services', {}).get('gdrive_monitor', {}).get('auto_start', True)
+            auto_start = config.get('services', {}).get('gdrive', {}).get('auto_start', True)
             if auto_start:
                 await gdrive_monitor.start()
                 logger.info("[OK] Google Drive monitoring started")
@@ -211,30 +206,102 @@ def create_unified_app(config: dict) -> FastAPI:
         """
         # Health Check
         
-        Returns the health status of all services.
+        Returns comprehensive health status of all services with latency measurements.
         
         **Response includes:**
         - Overall system status
+        - Neo4j connection status and latency
+        - Mistral API status and latency
         - WhatsApp service status (if enabled)
         - Google Drive monitoring status (if enabled)
-        - Statistics and metrics
+        - Postgres status (if enabled)
+        - System statistics and uptime
         """
+        import time
+        from datetime import datetime
+        
         health_data = {
             "status": "healthy",
+            "timestamp": datetime.utcnow().isoformat() + "Z",
             "services": {}
         }
+
+        # Neo4j health check
+        try:
+            start = time.time()
+            from neo4j import GraphDatabase
+            driver = GraphDatabase.driver(
+                config['neo4j']['uri'],
+                auth=(config['neo4j']['user'], config['neo4j']['password'])
+            )
+            driver.verify_connectivity()
+            latency_ms = (time.time() - start) * 1000
+            driver.close()
+            
+            health_data['services']['neo4j'] = {
+                "status": "up",
+                "latency_ms": round(latency_ms, 2)
+            }
+        except Exception as e:
+            health_data['services']['neo4j'] = {
+                "status": "down",
+                "error": str(e)
+            }
+            health_data['status'] = "degraded"
+
+        # Mistral API health check
+        try:
+            start = time.time()
+            from mistralai.client import MistralClient
+            client = MistralClient(api_key=config['mistral']['api_key'])
+            # Simple API check (list models is lightweight)
+            client.list_models()
+            latency_ms = (time.time() - start) * 1000
+            
+            health_data['services']['mistral'] = {
+                "status": "up",
+                "latency_ms": round(latency_ms, 2)
+            }
+        except Exception as e:
+            health_data['services']['mistral'] = {
+                "status": "down",
+                "error": str(e)
+            }
+            health_data['status'] = "degraded"
+
+        # Postgres health check (if enabled)
+        if config.get('postgres', {}).get('enabled', False):
+            try:
+                start = time.time()
+                import psycopg2
+                conn_string = config['postgres']['connection_string']
+                conn = psycopg2.connect(conn_string)
+                conn.close()
+                latency_ms = (time.time() - start) * 1000
+                
+                health_data['services']['postgres'] = {
+                    "status": "up",
+                    "latency_ms": round(latency_ms, 2)
+                }
+            except Exception as e:
+                health_data['services']['postgres'] = {
+                    "status": "down",
+                    "error": str(e)
+                }
+                # Postgres is optional, don't mark as degraded
+                health_data['services']['postgres']['optional'] = True
 
         # WhatsApp health
         if whatsapp_enabled and whatsapp_agent:
             try:
                 stats = whatsapp_agent.get_stats()
                 health_data['services']['whatsapp'] = {
-                    "status": "healthy",
+                    "status": "ready",
                     "stats": stats
                 }
             except Exception as e:
                 health_data['services']['whatsapp'] = {
-                    "status": "unhealthy",
+                    "status": "error",
                     "error": str(e)
                 }
                 health_data['status'] = "degraded"
@@ -242,13 +309,16 @@ def create_unified_app(config: dict) -> FastAPI:
         # GDrive health
         if gdrive_enabled and gdrive_monitor:
             try:
+                monitor_status = gdrive_monitor.get_status()
                 health_data['services']['gdrive'] = {
-                    "status": "healthy",
-                    "monitoring": gdrive_monitor.get_status()
+                    "status": "monitoring" if monitor_status['is_running'] else "stopped",
+                    "last_check": monitor_status.get('last_check'),
+                    "pending_files": monitor_status.get('pending_files', 0),
+                    "processed_total": monitor_status.get('processed_total', 0)
                 }
             except Exception as e:
                 health_data['services']['gdrive'] = {
-                    "status": "unhealthy",
+                    "status": "error",
                     "error": str(e)
                 }
                 health_data['status'] = "degraded"
@@ -305,6 +375,7 @@ def create_unified_app(config: dict) -> FastAPI:
                 response_text = await whatsapp_agent.handle_incoming_message(message_data)
 
                 # Send response if we have one
+                # (None means response was already sent via processing indicator flow)
                 if response_text:
                     success = await whatsapp_agent.send_response(
                         message_data['from'],
@@ -314,6 +385,8 @@ def create_unified_app(config: dict) -> FastAPI:
                         logger.info("Response sent successfully")
                     else:
                         logger.error("Failed to send response")
+                else:
+                    logger.info("Response already sent (processing indicator flow)")
 
                 # Return 200 OK to Twilio (required)
                 return Response(content="", status_code=200)

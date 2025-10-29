@@ -1,48 +1,98 @@
-# Neo4j Knowledge Graph Requirements
+# ==================================================
+# PRODUCTION REQUIREMENTS
+# ==================================================
+# Consolidated dependencies for the entire RAG system
+# All versions pinned for reproducibility
 
-# Core dependencies
-neo4j>=5.15.0
-python-dateutil>=2.8.2
+# ==================================================
+# Core Dependencies
+# ==================================================
+python-dateutil==2.8.2
 
-# LangChain + Mistral API (Production Setup)
-langchain>=0.3.0
-langchain-mistralai>=0.2.0
-langchain-core>=0.3.0
-langgraph>=0.2.0
-pydantic>=2.5.0
+# ==================================================
+# Environment & Configuration
+# ==================================================
+python-dotenv==1.0.0
 
-# Postgres Mirror Database + pgvector
-psycopg2-binary>=2.9.9
-pgvector>=0.2.4
+# ==================================================
+# Neo4j Knowledge Graph
+# ==================================================
+neo4j==5.15.0
 
-# Embeddings
-mistralai>=1.2.0
+# ==================================================
+# LangChain & LangGraph (Multi-Agent System)
+# ==================================================
+langchain==0.3.1
+langchain-core==0.3.5
+langchain-mistralai==0.2.0
+langgraph==0.2.16
+pydantic==2.5.3
 
-# Alternative: Ollama (Free & Local)
-# Install: https://ollama.ai/
-# Then run: ollama pull mistral
-# Uncomment below if using Ollama instead of API:
-# ollama>=0.1.0
+# ==================================================
+# Mistral AI (LLM & Embeddings)
+# ==================================================
+mistralai==1.2.1
 
-# Legacy Mistral API (without LangChain)
-# mistralai>=0.0.7
+# ==================================================
+# PostgreSQL + Vector Search (Optional)
+# ==================================================
+psycopg2-binary==2.9.9
+pgvector==0.2.4
 
-# Alternative: llama-cpp-python (Local - requires GGUF model)
-# Requires: Download Mistral GGUF model from HuggingFace
-# llama-cpp-python>=0.2.0
+# ==================================================
+# FastAPI & Web Server (WhatsApp Bot & Unified Agent)
+# ==================================================
+fastapi==0.104.1
+uvicorn[standard]==0.24.0.post1
+python-multipart==0.0.6
+pydantic-settings==2.1.0
 
-# Optional: Advanced NLP features
-# spacy>=3.7.0
-# transformers>=4.35.0
+# ==================================================
+# Twilio WhatsApp Integration
+# ==================================================
+twilio==8.10.3
 
-# Optional: Alternative LLMs
-# openai>=1.0.0
-# anthropic>=0.7.0
+# ==================================================
+# Google Drive Integration
+# ==================================================
+google-auth==2.23.4
+google-auth-oauthlib==1.1.0
+google-auth-httplib2==0.1.1
+google-api-python-client==2.108.0
 
-# Optional: Sentiment analysis
-# textblob>=0.17.1
-# vaderSentiment>=3.3.2
+# ==================================================
+# Document Parsing
+# ==================================================
+python-docx==1.1.0
+PyPDF2==3.0.1
+pandas==2.1.4
+openpyxl==3.1.2
 
-# Development tools
-# pytest>=7.4.0
-# black>=23.12.0
+# ==================================================
+# Streamlit Chatbot Interface (Optional)
+# ==================================================
+streamlit==1.28.2
+
+# ==================================================
+# SSL/TLS Support
+# ==================================================
+certifi==2023.11.17
+
+# ==================================================
+# Installation Instructions
+# ==================================================
+# 1. Create virtual environment:
+#    python -m venv venv
+#    source venv/bin/activate  # Linux/Mac
+#    venv\Scripts\activate     # Windows
+#
+# 2. Install dependencies:
+#    pip install --upgrade pip
+#    pip install -r requirements.txt
+#
+# 3. Configure environment:
+#    cp env.template .env
+#    # Edit .env with your credentials
+#
+# 4. Run the system:
+#    python run_unified_agent.py

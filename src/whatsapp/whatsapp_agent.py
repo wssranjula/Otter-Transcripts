@@ -12,7 +12,7 @@ import json
 
 from src.whatsapp.twilio_client import TwilioWhatsAppClient
 from src.whatsapp.conversation_manager import ConversationManager
-from src.agents.sybil_agent import SybilAgent
+from src.agents.sybil_subagents import SybilWithSubAgents
 
 logger = logging.getLogger(__name__)
 
@@ -45,12 +45,12 @@ class WhatsAppAgent:
             max_history=max_history
         )
         
-        # Initialize Sybil agent
+        # Initialize Sybil agent with sub-agents (query-agent + analysis-agent)
         neo4j_config = config['neo4j']
         mistral_key = config.get('mistral', {}).get('api_key', '')
-        mistral_model = config.get('mistral', {}).get('model', 'mistral-small-latest')
+        mistral_model = config.get('mistral', {}).get('model', 'mistral-large-latest')
         
-        self.sybil_agent = SybilAgent(
+        self.sybil_agent = SybilWithSubAgents(
             neo4j_uri=neo4j_config['uri'],
             neo4j_user=neo4j_config['user'],
             neo4j_password=neo4j_config['password'],
@@ -59,15 +59,18 @@ class WhatsAppAgent:
             model=mistral_model
         )
         
+        logger.info("Sybil agent initialized with sub-agent architecture (query-agent + analysis-agent)")
+        
         # Bot configuration
         whatsapp_config = config.get('whatsapp', {})
         self.trigger_words = twilio_config.get('bot_trigger_words', ['@agent', '@bot'])
         self.context_limit = whatsapp_config.get('context_limit', 5)
         self.enable_group_chat = whatsapp_config.get('enable_group_chat', True)
-        self.response_timeout = whatsapp_config.get('response_timeout_seconds', 30)
+        self.response_timeout = whatsapp_config.get('response_timeout_seconds', 60)  # Increased from 30 to 60
         self.max_message_length = whatsapp_config.get('max_message_length', 1500)
         self.auto_split_messages = whatsapp_config.get('auto_split_long_messages', True)
         self.prefer_concise = whatsapp_config.get('prefer_concise_responses', True)
+        self.send_processing_indicator = whatsapp_config.get('send_processing_indicator', True)
         
         logger.info("WhatsApp Agent initialized successfully")
         logger.info(f"Trigger words: {self.trigger_words}")
@@ -156,6 +159,11 @@ class WhatsAppAgent:
         self.conversation_manager.add_message(user_phone, 'user', question)
 
         try:
+            # Send immediate acknowledgment for complex queries (if enabled)
+            if self.send_processing_indicator:
+                await self.send_response(from_number, "🔍 Processing your question...")
+                logger.info("Sent processing indicator")
+            
             # Get conversation history for context
             history = self.conversation_manager.get_history(user_phone)
             
@@ -182,15 +190,23 @@ class WhatsAppAgent:
             self.conversation_manager.add_message(user_phone, 'assistant', answer)
 
             logger.info(f"Generated answer: {answer[:100]}...")
+            
+            # If we sent processing indicator, send final answer separately
+            if self.send_processing_indicator:
+                await self.send_response(from_number, answer)
+                logger.info("Sent final answer after processing indicator")
+                return None  # Already sent response
+            
             return answer
 
         except asyncio.TimeoutError:
             logger.error("Response generation timed out")
-            return "Sorry, the request took too long to process. Please try asking a simpler question."
+            timeout_msg = "⏱️ Sorry, the request took too long to process. Please try asking a more specific question or break it into smaller parts."
+            return timeout_msg
         
         except Exception as e:
-            logger.error(f"Error generating answer: {e}")
-            return f"Sorry, I encountered an error processing your question. Please try again."
+            logger.error(f"Error generating answer: {e}", exc_info=True)
+            return f"❌ Sorry, I encountered an error processing your question. Please try again."
 
     def _generate_answer(self, question: str, conversation_context: str) -> str:
         """

@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  unified-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: unified-rag-agent
+    restart: unless-stopped
+    
+    # Environment variables from .env file
+    env_file:
+      - .env
+    
+    # Ports
+    ports:
+      - "${PORT:-8000}:8000"
+    
+    # Volumes for persistent data
+    volumes:
+      # Config (read-only for security)
+      - ./config:/app/config:ro
+      # Data directories (read-write)
+      - gdrive_transcripts:/app/gdrive_transcripts
+      - ./data:/app/data
+      # Logs (for debugging)
+      - ./logs:/app/logs
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Resource limits (adjust based on your needs)
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+        labels: "production"
+    
+    # Network
+    networks:
+      - rag-network
+
+# Named volumes
+volumes:
+  gdrive_transcripts:
+    driver: local
+
+# Network
+networks:
+  rag-network:
+    driver: bridge
+

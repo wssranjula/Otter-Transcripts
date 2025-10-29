@@ -5,16 +5,19 @@ Launches FastAPI server with both WhatsApp Bot and Google Drive Monitor
 
 import sys
 import os
-import json
 import logging
 from pathlib import Path
 
 # Add src to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# Import config loader
+from src.core.config_loader import load_config, validate_config, get_env
+
 # Configure logging
+log_level = get_env('LOG_LEVEL', 'INFO')
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, log_level),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
@@ -23,18 +26,6 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
-
-
-def load_config(config_path: str = "config/config.json") -> dict:
-    """Load configuration from JSON file"""
-    try:
-        with open(config_path, 'r') as f:
-            config = json.load(f)
-        logger.info(f"Configuration loaded from {config_path}")
-        return config
-    except Exception as e:
-        logger.error(f"Failed to load configuration: {e}")
-        raise
 
 
 def setup_services_config(config: dict) -> dict:
@@ -92,16 +83,19 @@ def validate_whatsapp_config(config: dict) -> bool:
 
 def validate_gdrive_config(config: dict) -> bool:
     """Validate Google Drive configuration"""
-    if not config.get('services', {}).get('gdrive_monitor', {}).get('enabled', True):
+    if not config.get('services', {}).get('gdrive', {}).get('enabled', True):
         return True  # Skip validation if disabled
     
-    gdrive_config_file = config.get('services', {}).get('gdrive_monitor', {}).get(
-        'config_file', 'config/gdrive_config.json'
-    )
-    
-    if not os.path.exists(gdrive_config_file):
-        logger.warning(f"Google Drive config not found: {gdrive_config_file}")
+    # Check for required Google Drive fields in unified config
+    if 'google_drive' not in config:
+        logger.warning("Google Drive configuration section missing")
         return False
+    
+    required_fields = ['credentials_file', 'token_file', 'folder_name']
+    for field in required_fields:
+        if not config['google_drive'].get(field):
+            logger.warning(f"Missing Google Drive field: {field}")
+            return False
     
     return True
 
@@ -173,9 +167,9 @@ def print_usage_tips(config: dict):
         print()
     
     if gdrive_enabled:
-        gdrive_config = config.get('services', {}).get('gdrive_monitor', {})
+        gdrive_config = config.get('services', {}).get('gdrive', {})
         auto_start = gdrive_config.get('auto_start', True)
-        interval = gdrive_config.get('interval_seconds', 60)
+        interval = gdrive_config.get('monitor_interval_seconds', 60)
         
         print("Google Drive Monitor:")
         if auto_start:
@@ -201,10 +195,28 @@ def main():
     
     # Load configuration
     try:
-        config = load_config()
+        config = load_config("config/gdrive_config.json")
+        
+        # Validate configuration
+        if not validate_config(config):
+            print("\nERROR: Configuration validation failed!")
+            print("Please check:")
+            print("  1. .env file exists with required variables (copy from env.template)")
+            print("  2. All required environment variables are set")
+            print("  3. Credentials are correct")
+            sys.exit(1)
+        
+    except FileNotFoundError:
+        print(f"ERROR: Configuration file not found!")
+        print("\nPlease ensure config/gdrive_config.json exists.")
+        print("If using a custom config, update the path in run_unified_agent.py")
+        sys.exit(1)
     except Exception as e:
         print(f"ERROR: Failed to load configuration: {e}")
-        print("\nPlease ensure config/config.json exists and is properly configured.")
+        print("\nPlease check:")
+        print("  1. config/gdrive_config.json is valid JSON")
+        print("  2. .env file exists with required variables")
+        print("  3. All environment variables are set correctly")
         sys.exit(1)
     
     # Setup services configuration
