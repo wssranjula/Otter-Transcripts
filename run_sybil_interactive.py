@@ -12,7 +12,7 @@ def main():
     
     # Load config
     try:
-        with open("config/config.json") as f:
+        with open("config/config.json", encoding='utf-8') as f:
             config = json.load(f)
     except Exception as e:
         print(f"❌ Failed to load config: {e}")

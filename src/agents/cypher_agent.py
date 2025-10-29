@@ -30,6 +30,7 @@ class AgentState(TypedDict):
     cypher_query: str
     query_results: List[Dict]
     final_answer: str
+    files: Dict[str, str]  # Virtual filesystem for context offloading
     
     
 # ========================================

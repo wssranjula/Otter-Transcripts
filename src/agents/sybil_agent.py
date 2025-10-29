@@ -238,6 +238,10 @@ def create_sybil_tools(neo4j_tools: Neo4jCypherTools, config: dict):
     # Import TODO tools
     from src.core.todo_tools import write_todos, read_todos, mark_todo_completed
     
+    # Import Virtual Filesystem tools
+    # TEMPORARILY DISABLED: InjectedState causing duplicate tool call ID issues
+    # from src.core.virtual_fs_tools import ls_files, read_file, write_file
+    
     @tool
     def get_database_schema() -> str:
         """
@@ -382,6 +386,10 @@ def create_sybil_tools(neo4j_tools: Neo4jCypherTools, config: dict):
         write_todos,
         read_todos,
         mark_todo_completed
+        # Virtual FS tools temporarily disabled due to duplicate tool call ID issue
+        # ls_files,
+        # read_file,
+        # write_file
     ]
 
 
@@ -577,7 +585,7 @@ class SybilAgent:
 
 **Query Strategy - TODO-BASED PLANNING FOR COMPLEX QUERIES:**
 
-**CRITICAL: For complex, multi-step queries, you MUST use TODO planning workflow!**
+**CRITICAL: For complex, multi-step queries, you MUST use TODO + Virtual Filesystem workflow!**
 
 ### Recognize Complex Queries
 Complex queries require TODO planning:
@@ -587,7 +595,7 @@ Complex queries require TODO planning:
 - Temporal analysis: "Track X over time"
 - Strategic synthesis: "Map our stakeholder strategy"
 
-### TODO Planning Workflow
+### TODO + Virtual Filesystem Workflow
 
 **Step 1: Create TODO Plan**
 Use write_todos to break query into sequential steps:
@@ -596,22 +604,51 @@ Example: "How has US strategy evolved July to October?"
 
 write_todos([
   {id:"1", content:"Find July meetings with US strategy", status:"pending"},
-  {id:"2", content:"Extract US strategy themes from July", status:"pending"},
+  {id:"2", content:"Save July results to file", status:"pending"},
   {id:"3", content:"Find October meetings with US strategy", status:"pending"},
-  {id:"4", content:"Extract US strategy themes from October", status:"pending"},
-  {id:"5", content:"Compare themes and identify changes", status:"pending"},
+  {id:"4", content:"Save October results to file", status:"pending"},
+  {id:"5", content:"Read both files and compare themes", status:"pending"},
   {id:"6", content:"Synthesize evolution narrative", status:"pending"}
 ])
 ```
 
-**Step 2: Execute TODOs Sequentially**
+**Step 2: Execute TODOs with Context Offloading**
 For each TODO:
 1. Update to "in_progress": write_todos with updated status
 2. Execute required queries (execute_cypher_query)
-3. Store intermediate results in your working memory
+3. **SAVE results to virtual filesystem**: write_file("july_meetings.json", results)
 4. Mark as "completed": write_todos with completed status
-5. Use read_todos to check progress
-6. Move to next TODO
+5. Continue to next TODO
+6. **READ from filesystem when needed**: read_file("july_meetings.json")
+
+**Step 3: Use Virtual Filesystem for Context Management**
+
+**CRITICAL: Save intermediate results to files to prevent context overflow!**
+
+When to use virtual filesystem:
+- **After expensive queries**: Save results immediately
+  ```
+  write_file("july_meetings.json", json.dumps(query_results))
+  ```
+- **For intermediate analysis**: Store extracted themes
+  ```
+  write_file("us_strategy_themes_july.txt", themes_summary)
+  ```
+- **For TODO tracking**: Persist TODO list
+  ```
+  write_file("current_todos.txt", todo_list_formatted)
+  ```
+- **Before synthesis**: Load needed data
+  ```
+  july_data = read_file("july_meetings.json")
+  october_data = read_file("october_meetings.json")
+  ```
+
+**Benefits**:
+- ✅ Query results stay accessible without re-querying
+- ✅ Message context stays small (just references filenames)
+- ✅ Can retrieve specific data when needed
+- ✅ Prevents context overflow on complex queries
 
 **CRITICAL: When calling write_todos, ALWAYS include ALL todos (pending, in_progress, completed, failed, AND skipped) in the list. 
 DO NOT remove todos - they provide context and prevent re-doing tasks!**
@@ -815,6 +852,7 @@ Remember: You are Sybil, a trusted internal assistant. Be helpful, professional,
         
         # Use same state as CypherReActAgent
         from src.agents.cypher_agent import AgentState
+        from langchain_core.messages import ToolMessage
         
         # Define agent node
         def agent_node(state: AgentState):
@@ -823,8 +861,53 @@ Remember: You are Sybil, a trusted internal assistant. Be helpful, professional,
             response = self.llm_with_tools.invoke(messages)
             return {"messages": [response]}
         
-        # Define tool node
-        tool_node = ToolNode(self.tools)
+        # Define tool node with message pruning
+        def tool_node_with_pruning(state: AgentState):
+            """Execute tools and prune large responses"""
+            # Execute tools normally
+            tool_node = ToolNode(self.tools)
+            result = tool_node.invoke(state)
+            
+            # Prune large tool responses to prevent context overflow
+            pruned_messages = []
+            for msg in result["messages"]:
+                if isinstance(msg, ToolMessage):
+                    content = msg.content
+                    # If content is very large, truncate it
+                    if len(str(content)) > 5000:
+                        # Try to parse JSON and summarize
+                        try:
+                            import json as json_lib
+                            data = json_lib.loads(content)
+                            if "results" in data:
+                                result_count = len(data.get("results", []))
+                                # Keep metadata but truncate results
+                                summary = {
+                                    "status": data.get("status", "success"),
+                                    "result_count": result_count,
+                                    "metadata": data.get("metadata", {}),
+                                    "results_preview": data.get("results", [])[:2] if result_count > 0 else [],
+                                    "note": f"[Truncated: {result_count} total results]"
+                                }
+                                content = json_lib.dumps(summary, indent=2)
+                        except:
+                            # If not JSON, just truncate
+                            content = str(content)[:5000] + "\n...[Truncated for context management]"
+                    
+                    # IMPORTANT: Preserve all message attributes to avoid duplicate ID issues
+                    # Create new message with truncated content but preserve the original tool_call_id
+                    pruned_msg = ToolMessage(
+                        content=content,
+                        tool_call_id=msg.tool_call_id,
+                        name=getattr(msg, 'name', None),
+                        artifact=getattr(msg, 'artifact', None),
+                        status=getattr(msg, 'status', None),
+                    )
+                    pruned_messages.append(pruned_msg)
+                else:
+                    pruned_messages.append(msg)
+            
+            return {"messages": pruned_messages}
         
         # Define routing logic
         def should_continue(state: AgentState):
@@ -838,12 +921,27 @@ Remember: You are Sybil, a trusted internal assistant. Be helpful, professional,
             # Otherwise, end
             return "end"
         
+        # Define message pruning node
+        def prune_messages(state: AgentState):
+            """Prune old messages if context is getting too large"""
+            messages = state["messages"]
+            
+            # Keep: system prompt + user question + last 20 messages
+            if len(messages) > 25:
+                system_msg = messages[0]
+                user_msg = messages[1]
+                recent_msgs = messages[-20:]
+                return {"messages": [system_msg, user_msg] + recent_msgs}
+            
+            return {"messages": messages}
+        
         # Build graph
         workflow = StateGraph(AgentState)
         
         # Add nodes
         workflow.add_node("agent", agent_node)
-        workflow.add_node("tools", tool_node)
+        workflow.add_node("tools", tool_node_with_pruning)
+        workflow.add_node("prune", prune_messages)
         
         # Set entry point
         workflow.set_entry_point("agent")
@@ -858,8 +956,9 @@ Remember: You are Sybil, a trusted internal assistant. Be helpful, professional,
             }
         )
         
-        # Tools always return to agent
-        workflow.add_edge("tools", "agent")
+        # Tools go to pruning, then back to agent
+        workflow.add_edge("tools", "prune")
+        workflow.add_edge("prune", "agent")
         
         return workflow.compile()
     
@@ -881,7 +980,8 @@ Remember: You are Sybil, a trusted internal assistant. Be helpful, professional,
             "messages": [
                 SystemMessage(content=system_prompt),
                 HumanMessage(content=user_question)
-            ]
+            ],
+            "files": {}  # Virtual filesystem for context offloading
         }
         
         # Run agent
@@ -971,6 +1071,28 @@ Remember: You are Sybil, a trusted internal assistant. Be helpful, professional,
                                 print(f"📊 [STEP {step_counter}] CHECKING DATABASE SCHEMA")
                                 print(f"{'='*70}")
                                 print("Understanding what data is available...")
+                            
+                            elif tool_name == 'write_file':
+                                print(f"\n{'='*70}")
+                                print(f"💾 [STEP {step_counter}] SAVING TO VIRTUAL FILESYSTEM")
+                                print(f"{'='*70}")
+                                file_path = tool_call['args'].get('file_path', 'N/A')
+                                content_size = len(tool_call['args'].get('content', ''))
+                                print(f"File: {file_path} ({content_size} bytes)")
+                                print("💡 Offloading data to prevent context overflow")
+                            
+                            elif tool_name == 'read_file':
+                                print(f"\n{'='*70}")
+                                print(f"📂 [STEP {step_counter}] READING FROM VIRTUAL FILESYSTEM")
+                                print(f"{'='*70}")
+                                file_path = tool_call['args'].get('file_path', 'N/A')
+                                print(f"File: {file_path}")
+                            
+                            elif tool_name == 'ls_files':
+                                print(f"\n{'='*70}")
+                                print(f"📁 [STEP {step_counter}] LISTING VIRTUAL FILES")
+                                print(f"{'='*70}")
+                                print("Checking what data has been saved...")
                             
                             else:
                                 print(f"\n{'='*70}")
