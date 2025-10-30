@@ -506,7 +506,7 @@ class SybilWithSubAgents:
         self.agent = create_react_agent(
             self.llm,
             tools=supervisor_tools,
-            prompt=supervisor_prompt
+            state_modifier=supervisor_prompt
         )
     
     def query(self, user_question: str, verbose: bool = False, source: str = "unknown") -> str:
