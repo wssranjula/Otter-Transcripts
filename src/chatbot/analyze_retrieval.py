@@ -7,7 +7,7 @@ from rag_queries import RAGQueryHelper
 
 NEO4J_URI = "bolt://220210fe.databases.neo4j.io:7687"
 NEO4J_USER = "neo4j"
-NEO4J_PASSWORD = "uefo7_cCO4KdvrpS3knrhJ39Pwn2KDrFD0NCH4SKHv8"
+NEO4J_PASSWORD = "YOUR_NEO4J_PASSWORD_HERE"  # Get from config.json
 
 print("="*70)
 print("KNOWLEDGE BASE ANALYSIS - Retrieval Quality Insights")

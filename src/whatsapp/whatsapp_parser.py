@@ -10,6 +10,14 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 
+# Optional embeddings support
+try:
+    from src.core.embeddings import MistralEmbedder
+    EMBEDDINGS_AVAILABLE = True
+except ImportError:
+    EMBEDDINGS_AVAILABLE = False
+    MistralEmbedder = None
+
 
 @dataclass
 class WhatsAppMessage:
@@ -60,14 +68,18 @@ class WhatsAppParser:
         '‎Location': 'location',
     }
 
-    def __init__(self, mistral_api_key: str = None):
+    def __init__(self, mistral_api_key: str = None, generate_embeddings: bool = False):
         """
         Initialize WhatsApp parser
 
         Args:
-            mistral_api_key: Optional API key for entity extraction
+            mistral_api_key: Optional API key for entity extraction and embeddings
+            generate_embeddings: Whether to generate embeddings for chunks
         """
         self.mistral_api_key = mistral_api_key
+        self.generate_embeddings = generate_embeddings
+        
+        # Initialize entity extractor
         self.extractor = None
         if mistral_api_key:
             try:
@@ -78,6 +90,15 @@ class WhatsAppParser:
                 )
             except Exception as e:
                 print(f"[WARN] Could not initialize entity extractor: {e}")
+        
+        # Initialize embedder
+        self.embedder = None
+        if generate_embeddings and mistral_api_key:
+            if EMBEDDINGS_AVAILABLE:
+                self.embedder = MistralEmbedder(api_key=mistral_api_key)
+                print("[OK] Embeddings enabled for WhatsApp parser")
+            else:
+                print("[WARN] Embeddings requested but module not available")
 
     def parse_chat_file(self, file_path: str) -> Dict:
         """
@@ -129,6 +150,12 @@ class WhatsAppParser:
         # Link chunks to entities
         chunk_entity_links = self._link_chunks_to_entities(chunks, entities)
         print(f"[OK] Created {len(chunk_entity_links)} chunk-entity links")
+
+        # Generate embeddings if enabled
+        if self.embedder and chunks:
+            print(f"[LOG] Generating embeddings for chunks...")
+            self.embedder.embed_chunks(chunks)
+            print(f"[OK] Embeddings generated")
 
         return {
             'conversation': conversation,
@@ -219,7 +246,7 @@ class WhatsAppParser:
         date_formats = [
             '%d/%m/%Y',  # DD/MM/YYYY
             '%m/%d/%Y',  # MM/DD/YYYY
-            '%d/%m/%y',  # DD/MM/YY
+            '%d/%m/%y',  # DD/MM/YY 
             '%m/%d/%y',  # MM/DD/YY
         ]
 

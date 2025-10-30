@@ -15,7 +15,7 @@ credentials.json
 token.pickle
 config/credentials.json
 config/token.pickle
-
+gdrive.txt
 # Configuration files with secrets
 config.json
 config/config.json
@@ -33,6 +33,12 @@ gdrive_state.json
 # Generated data
 config/knowledge_graph*.json
 knowledge_graph*.json
+
+# Log files (may contain secrets)
+*.log
+*.log.*
+unified_agent.log
+whatsapp_agent.log
 
 # Temporary files
 gdrive_transcripts/

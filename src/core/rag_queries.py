@@ -8,6 +8,7 @@ from typing import List, Dict, Optional
 import json
 import ssl
 import certifi
+import re
 
 
 class RAGQueryHelper:
@@ -24,6 +25,30 @@ class RAGQueryHelper:
 
     def close(self):
         self.driver.close()
+
+    @staticmethod
+    def escape_lucene_special_chars(text: str) -> str:
+        """
+        Escape special Lucene characters in search queries
+        
+        Lucene special characters: + - && || ! ( ) { } [ ] ^ " ~ * ? : \
+        
+        Args:
+            text: Raw search text
+            
+        Returns:
+            Escaped text safe for Lucene queries
+        """
+        # List of special characters that need to be escaped
+        special_chars = ['+', '-', '&', '|', '!', '(', ')', '{', '}', 
+                        '[', ']', '^', '"', '~', '*', '?', ':', '\\']
+        
+        # Escape each special character with a backslash
+        escaped_text = text
+        for char in special_chars:
+            escaped_text = escaped_text.replace(char, '\\' + char)
+        
+        return escaped_text
 
     # ========================================
     # Basic Retrieval Patterns
@@ -96,6 +121,9 @@ class RAGQueryHelper:
         Returns:
             List of matching chunks
         """
+        # Escape Lucene special characters to prevent parsing errors
+        escaped_query = self.escape_lucene_special_chars(query)
+        
         with self.driver.session() as session:
             result = session.run("""
                 CALL db.index.fulltext.queryNodes('chunk_text', $search_text)
@@ -110,7 +138,7 @@ class RAGQueryHelper:
                        score
                 ORDER BY score DESC
                 LIMIT $limit
-            """, search_text=query, limit=limit)
+            """, search_text=escaped_query, limit=limit)
 
             return [dict(record) for record in result]
 
@@ -596,7 +624,7 @@ def main():
 
     NEO4J_URI = "bolt://220210fe.databases.neo4j.io:7687"
     NEO4J_USER = "neo4j"
-    NEO4J_PASSWORD = "uefo7_cCO4KdvrpS3knrhJ39Pwn2KDrFD0NCH4SKHv8"
+    NEO4J_PASSWORD = "YOUR_NEO4J_PASSWORD_HERE"  # Get from config.json
 
     print("="*70)
     print("RAG QUERY EXAMPLES")

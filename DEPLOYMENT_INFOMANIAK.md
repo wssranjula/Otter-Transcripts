@@ -1,436 +1,331 @@
 # Infomaniak Deployment Guide
-## Google Drive RAG Pipeline on Infomaniak VPS
+## Automated Production Deployment
 
-Infomaniak is a Swiss hosting provider known for privacy, reliability, and competitive pricing. Perfect for hosting your Google Drive automation!
-
----
-
-## 🎯 Recommended Plan
-
-### **Infomaniak VPS Lite** - Best Value ⭐⭐⭐⭐⭐
-
-**Specs:**
-- **CPU**: 2 vCPU (AMD EPYC)
-- **RAM**: 4GB
-- **Storage**: 40GB NVMe SSD
-- **Bandwidth**: Unlimited
-- **Price**: €5-6/month (~CHF 6)
-- **OS**: Ubuntu 22.04 LTS
-
-**Why this plan:**
-- ✅ More powerful than GCP free tier (4GB vs 1GB RAM)
-- ✅ Unlimited bandwidth
-- ✅ NVMe SSD (faster than regular SSD)
-- ✅ Swiss hosting (privacy-focused)
-- ✅ 24/7 monitoring capability
-- ✅ Can run both monitor + chatbot
+**Simplified setup for the Unified RAG Agent on Infomaniak VPS.**
 
 ---
 
-## 📋 Deployment Plan
+## 🎯 Quick Start (5 Minutes)
 
-### Phase 1: Initial Setup (15 minutes)
+### Step 1: Order Infomaniak VPS
 
-#### Step 1.1: Order VPS
 1. Go to [Infomaniak VPS Lite](https://www.infomaniak.com/en/hosting/vps-lite)
-2. Select configuration:
-   - **VPS Lite 2**: 2 vCPU, 4GB RAM, 40GB NVMe (~€6/month)
-   - **OS**: Ubuntu 22.04 LTS
-   - **Data Center**: Switzerland (Zurich or Geneva)
-3. Complete order
+2. Select **VPS Lite 2**: 2 vCPU, 4GB RAM (~€6/month)
+3. Choose **Ubuntu 22.04 LTS**
+4. Complete order and note your credentials
 
-#### Step 1.2: Access VPS
-You'll receive:
-- IP address
-- Root password
-- SSH access details
+### Step 2: Connect to VPS
 
-**Connect via SSH:**
 ```bash
 ssh root@YOUR_VPS_IP
 # Enter password when prompted
 ```
 
-#### Step 1.3: Initial Server Setup
-```bash
-# Update system
-apt update && apt upgrade -y
-
-# Create non-root user
-adduser gdrive
-usermod -aG sudo gdrive
-
-# Setup SSH for new user
-su - gdrive
-
-# Generate SSH key (optional, for security)
-ssh-keygen -t ed25519
-```
-
----
-
-### Phase 2: Install Dependencies (10 minutes)
+### Step 3: Run Automated Setup
 
 ```bash
-# Install Python 3.11
-sudo apt install -y software-properties-common
-sudo add-apt-repository ppa:deadsnakes/ppa -y
-sudo apt update
-sudo apt install -y python3.11 python3.11-venv python3-pip git
-
-# Install system dependencies
-sudo apt install -y build-essential libssl-dev libffi-dev python3-dev
-
-# Verify installation
-python3.11 --version
+# Download and run automated setup script
+curl -sSL https://raw.githubusercontent.com/your-repo/main/deploy/infomaniak_setup.sh | bash
 ```
 
----
+**That's it!** The script will:
+- ✅ Update system packages
+- ✅ Install Python 3.11 and dependencies
+- ✅ Clone the repository
+- ✅ Create virtual environment
+- ✅ Setup systemd service
+- ✅ Configure firewall
 
-### Phase 3: Deploy Application (10 minutes)
+### Step 4: Configure Credentials
 
-#### Step 3.1: Clone Repository
 ```bash
-cd ~
-git clone https://github.com/wssranjula/Otter-Transcripts.git
-cd Otter-Transcripts
+cd ~/Otter-Transcripts
+nano config/config.json
 ```
 
-#### Step 3.2: Setup Virtual Environment
-```bash
-python3.11 -m venv venv
-source venv/bin/activate
-
-# Install dependencies
-pip install --upgrade pip
-pip install -r requirements.txt
-pip install -r requirements_gdrive.txt
-```
-
-#### Step 3.3: Configure Application
-```bash
-# Create config from template
-cp config/gdrive_config.json.template config/gdrive_config.json
-
-# Edit configuration
-nano config/gdrive_config.json
-```
-
-**Add your credentials:**
+Fill in your credentials:
 ```json
 {
-  "google_drive": {
-    "credentials_file": "config/credentials.json",
-    "token_file": "config/token.pickle",
-    "state_file": "config/gdrive_state.json",
-    "folder_name": "RAG Documents",
-    "folder_id": null,
-    "monitor_interval_seconds": 60
-  },
-  "rag": {
-    "temp_transcript_dir": "gdrive_transcripts",
-    "output_json": "knowledge_graph_gdrive.json",
-    "mistral_api_key": "YOUR_MISTRAL_API_KEY",
-    "model": "mistral-large-latest"
-  },
   "neo4j": {
-    "uri": "bolt://your-neo4j-instance:7687",
-    "user": "neo4j",
-    "password": "YOUR_PASSWORD"
+    "uri": "bolt://your-instance.databases.neo4j.io:7687",
+    "password": "your-neo4j-password"
   },
-  "processing": {
-    "auto_load_to_neo4j": true,
-    "clear_temp_files": false,
-    "batch_processing": false
+  "mistral": {
+    "api_key": "your-mistral-api-key"
+  },
+  "postgres": {
+    "enabled": true,
+    "connection_string": "postgresql://user:pass@host:5432/database"
+  },
+  "twilio": {
+    "account_sid": "your-twilio-sid",
+    "auth_token": "your-twilio-token",
+    "whatsapp_number": "+14155238886"
+  },
+  "whatsapp": {
+    "whitelist_enabled": true
   }
 }
 ```
 
-#### Step 3.4: Upload Google Credentials
+**PostgreSQL Setup** (Required for Admin Panel):
+- Use [Neon.tech](https://neon.tech) free tier for PostgreSQL
+- Add connection string to `config.json`
+- Tables will be created automatically on first run
 
-**Option A: From your local machine**
-```bash
-# On your local machine (Windows PowerShell)
-scp config/credentials.json gdrive@YOUR_VPS_IP:~/Otter-Transcripts/config/
-```
-
-**Option B: Create on server**
-```bash
-nano config/credentials.json
-# Paste your Google OAuth credentials JSON
-# Save with Ctrl+X, Y, Enter
-```
-
----
-
-### Phase 4: Test the Pipeline (5 minutes)
+### Step 5: Setup Admin Tables
 
 ```bash
-# Activate virtual environment
 cd ~/Otter-Transcripts
 source venv/bin/activate
-
-# Test setup
-python run_gdrive.py setup
-# This will open OAuth flow - follow the link in browser
-
-# Test batch processing
-python run_gdrive.py batch
+python scripts/setup_admin_tables.py
 ```
 
----
+This creates:
+- `admin_users` table (for future authentication)
+- `whatsapp_whitelist` table (for WhatsApp access control)
 
-### Phase 5: Setup as System Service (10 minutes)
-
-#### Step 5.1: Create Systemd Service for Google Drive Monitor
+### Step 6: Start the Service
 
 ```bash
-sudo nano /etc/systemd/system/gdrive-monitor.service
-```
-
-**Add this content:**
-```ini
-[Unit]
-Description=Google Drive RAG Pipeline Monitor
-After=network.target
-
-[Service]
-Type=simple
-User=gdrive
-WorkingDirectory=/home/gdrive/Otter-Transcripts
-Environment="PATH=/home/gdrive/Otter-Transcripts/venv/bin"
-ExecStart=/home/gdrive/Otter-Transcripts/venv/bin/python run_gdrive.py monitor
-Restart=always
-RestartSec=10
-StandardOutput=append:/home/gdrive/gdrive-monitor.log
-StandardError=append:/home/gdrive/gdrive-monitor-error.log
-
-[Install]
-WantedBy=multi-user.target
-```
-
-**Enable and start:**
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable gdrive-monitor
-sudo systemctl start gdrive-monitor
+# Enable and start
+sudo systemctl enable unified-agent
+sudo systemctl start unified-agent
 
 # Check status
-sudo systemctl status gdrive-monitor
-```
+sudo systemctl status unified-agent
 
-#### Step 5.2: Create Systemd Service for Chatbot (Optional)
+# Test health endpoint
+curl http://localhost:8000/health
 
-```bash
-sudo nano /etc/systemd/system/rag-chatbot.service
-```
-
-**Add this content:**
-```ini
-[Unit]
-Description=RAG Chatbot Streamlit Interface
-After=network.target
-
-[Service]
-Type=simple
-User=gdrive
-WorkingDirectory=/home/gdrive/Otter-Transcripts
-Environment="PATH=/home/gdrive/Otter-Transcripts/venv/bin"
-ExecStart=/home/gdrive/Otter-Transcripts/venv/bin/python run_chatbot.py
-Restart=always
-RestartSec=10
-StandardOutput=append:/home/gdrive/chatbot.log
-StandardError=append:/home/gdrive/chatbot-error.log
-
-[Install]
-WantedBy=multi-user.target
-```
-
-**Enable and start:**
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable rag-chatbot
-sudo systemctl start rag-chatbot
-
-# Check status
-sudo systemctl status rag-chatbot
+# Test admin API
+curl http://localhost:8000/admin/whitelist/stats
 ```
 
 ---
 
-### Phase 6: Setup Firewall & Security (5 minutes)
-
-```bash
-# Install UFW (Uncomplicated Firewall)
-sudo apt install ufw
-
-# Allow SSH
-sudo ufw allow 22/tcp
-
-# Allow Streamlit (for chatbot)
-sudo ufw allow 8501/tcp
-
-# Enable firewall
-sudo ufw enable
-
-# Check status
-sudo ufw status
-```
-
-**Access chatbot:**
-- URL: `http://YOUR_VPS_IP:8501`
-- Username/password: Configure in `.streamlit/secrets.toml`
-
----
-
-### Phase 7: Setup SSL (Optional but Recommended)
-
-#### Option A: Use Nginx Reverse Proxy with Let's Encrypt
-
-```bash
-# Install Nginx and Certbot
-sudo apt install -y nginx certbot python3-certbot-nginx
-
-# Configure Nginx
-sudo nano /etc/nginx/sites-available/rag-chatbot
-```
-
-**Add:**
-```nginx
-server {
-    listen 80;
-    server_name your-domain.com;
-
-    location / {
-        proxy_pass http://localhost:8501;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-    }
-}
-```
-
-**Enable and get SSL:**
-```bash
-sudo ln -s /etc/nginx/sites-available/rag-chatbot /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl restart nginx
-
-# Get SSL certificate
-sudo certbot --nginx -d your-domain.com
-```
-
-**Access via HTTPS:**
-- URL: `https://your-domain.com`
-
----
-
-## 🔍 Monitoring & Maintenance
-
-### Check Service Status
-```bash
-# Monitor service
-sudo systemctl status gdrive-monitor
-
-# View real-time logs
-tail -f ~/gdrive-monitor.log
-
-# Check for errors
-grep ERROR ~/gdrive-monitor-error.log
-```
+## 📊 Monitoring
 
 ### View Logs
 ```bash
+# Real-time application logs
+tail -f ~/unified-agent.log
+
+# Error logs
+tail -f ~/unified-agent-error.log
+
+# Agent behavior monitoring (queries, tools, performance)
+tail -f ~/Otter-Transcripts/agent_monitoring.log
+
+# Unauthorized WhatsApp access attempts
+tail -f ~/Otter-Transcripts/unauthorized_whatsapp.log
+
 # Last 100 lines
-tail -n 100 ~/gdrive-monitor.log
-
-# Follow live
-tail -f ~/gdrive-monitor.log
-
-# Search for specific content
-grep "SUCCESS" ~/gdrive-monitor.log
+tail -n 100 ~/unified-agent.log
 ```
 
-### Restart Services
+### Check Status
 ```bash
-sudo systemctl restart gdrive-monitor
-sudo systemctl restart rag-chatbot
+# Service status
+sudo systemctl status unified-agent
+
+# Health check
+curl http://localhost:8000/health
+
+# Google Drive status (if enabled)
+curl http://localhost:8000/gdrive/status
+
+# Admin panel health
+curl http://localhost:8000/admin/chat/health
+
+# Whitelist stats
+curl http://localhost:8000/admin/whitelist/stats
 ```
 
-### Update Application
+### Common Commands
+```bash
+# Restart service
+sudo systemctl restart unified-agent
+
+# Stop service
+sudo systemctl stop unified-agent
+
+# View recent errors
+grep ERROR ~/unified-agent.log | tail -20
+```
+
+---
+
+## 🔧 Configuration
+
+### Services Configuration
+
+Edit `.env` to enable/disable services:
+
+```bash
+# Enable/disable WhatsApp
+WHATSAPP_ENABLED=true
+
+# Enable/disable Google Drive monitoring
+GDRIVE_ENABLED=true
+GDRIVE_AUTO_START=true
+GDRIVE_MONITOR_INTERVAL=60
+
+# Enable/disable Postgres vector search
+POSTGRES_ENABLED=false
+```
+
+### Google Drive Setup
+
+1. Upload `credentials.json` to VPS:
+   ```bash
+   # On your local machine
+   scp config/credentials.json user@VPS_IP:~/Otter-Transcripts/config/
+   ```
+
+2. Authenticate Google Drive:
+   ```bash
+   cd ~/Otter-Transcripts
+   source venv/bin/activate
+   python src/gdrive/gdrive_rag_pipeline.py setup
+   # Follow the OAuth link in output
+   ```
+
+### WhatsApp Setup (Optional)
+
+1. Setup ngrok tunnel:
+   ```bash
+   # Install ngrok
+   wget https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz
+   tar xvzf ngrok-v3-stable-linux-amd64.tgz
+   ./ngrok http 8000
+   ```
+
+2. Configure Twilio webhook:
+   - Copy ngrok URL: `https://xxxx.ngrok.io`
+   - In Twilio Console, set webhook to: `https://xxxx.ngrok.io/whatsapp/webhook`
+
+---
+
+## 🚀 Updates
+
+### Update Application Code
+
 ```bash
 cd ~/Otter-Transcripts
 git pull
-sudo systemctl restart gdrive-monitor
-sudo systemctl restart rag-chatbot
+sudo systemctl restart unified-agent
+```
+
+### Update Dependencies
+
+```bash
+cd ~/Otter-Transcripts
+source venv/bin/activate
+pip install --upgrade -r requirements.txt
+sudo systemctl restart unified-agent
 ```
 
 ---
 
-## 📊 Resource Monitoring
+## 🛠️ Troubleshooting
 
-### Install Monitoring Tools
+### Service Won't Start
+
 ```bash
-# Install htop
-sudo apt install htop
+# Check detailed logs
+sudo journalctl -u unified-agent -n 50
 
-# Install netdata (web-based monitoring)
-bash <(curl -Ss https://my-netdata.io/kickstart.sh)
+# Test manual run
+cd ~/Otter-Transcripts
+source venv/bin/activate
+python run_unified_agent.py
 ```
 
-**Access Netdata:**
-- URL: `http://YOUR_VPS_IP:19999`
+### Configuration Errors
 
-### Check Resource Usage
 ```bash
-# CPU and Memory
-htop
+# Validate environment variables
+cat .env | grep -v "^#" | grep -v "^$"
 
-# Disk usage
-df -h
+# Test config loading
+python -c "from src.core.config_loader import load_config; load_config('config/config.template.json')"
+```
 
-# Check running processes
-ps aux | grep python
+### Connection Issues
+
+```bash
+# Test Neo4j
+python -c "from neo4j import GraphDatabase; driver = GraphDatabase.driver('$NEO4J_URI', auth=('neo4j', '$NEO4J_PASSWORD')); driver.verify_connectivity(); print('Neo4j OK')"
+
+# Test Mistral API
+python -c "from mistralai.client import MistralClient; import os; client = MistralClient(api_key=os.getenv('MISTRAL_API_KEY')); print('Mistral OK')"
+```
+
+### Out of Memory
+
+```bash
+# Check memory usage
+free -h
+
+# Add swap if needed
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
+
+### Permission Errors
+
+```bash
+# Fix ownership
+sudo chown -R $USER:$USER ~/Otter-Transcripts
+
+# Fix permissions
+chmod +x run_unified_agent.py
 ```
 
 ---
 
-## 🔒 Security Best Practices
+## 💰 Cost Breakdown
 
-### 1. Change SSH Port (Optional)
+| Item | Monthly Cost |
+|------|--------------|
+| **Infomaniak VPS Lite 2** | €6.00 |
+| **Neo4j Aura Free Tier** | Free |
+| **Neon Postgres Free Tier** | Free |
+| **Domain (optional)** | ~€0.83 |
+| **Total** | **~€7/month** |
+
+---
+
+## 🔐 Security Best Practices
+
+### 1. Setup SSH Keys
+
 ```bash
-sudo nano /etc/ssh/sshd_config
-# Change Port 22 to Port 2222
-sudo systemctl restart sshd
-
-# Update firewall
-sudo ufw allow 2222/tcp
-sudo ufw delete allow 22/tcp
-```
-
-### 2. Setup SSH Key Authentication
-```bash
-# On local machine, generate key
+# On local machine
 ssh-keygen -t ed25519
 
 # Copy to server
-ssh-copy-id gdrive@YOUR_VPS_IP
+ssh-copy-id user@VPS_IP
 
-# Disable password authentication
+# Disable password auth
 sudo nano /etc/ssh/sshd_config
 # Set: PasswordAuthentication no
 sudo systemctl restart sshd
 ```
 
-### 3. Setup Automatic Security Updates
+### 2. Setup Automatic Updates
+
 ```bash
 sudo apt install unattended-upgrades
 sudo dpkg-reconfigure -plow unattended-upgrades
 ```
 
-### 4. Install Fail2Ban (Protect against brute force)
+### 3. Setup Fail2Ban
+
 ```bash
 sudo apt install fail2ban
 sudo systemctl enable fail2ban
@@ -439,172 +334,64 @@ sudo systemctl start fail2ban
 
 ---
 
-## 💰 Cost Breakdown
+## 📈 Performance Optimization
 
-### Monthly Costs
+### Monitor Resource Usage
 
-| Item | Cost |
-|------|------|
-| **Infomaniak VPS Lite 2** | €6.00/month |
-| **Domain (optional)** | €10/year (~€0.83/month) |
-| **SSL Certificate** | Free (Let's Encrypt) |
-| **Total** | **€6.83/month** |
-
-### Why Infomaniak vs Others?
-
-| Provider | Cost | RAM | Storage | Location |
-|----------|------|-----|---------|----------|
-| **Infomaniak** | €6 | 4GB | 40GB NVMe | Switzerland 🇨🇭 |
-| GCP (paid) | $10 | 1.7GB | 20GB | USA/EU |
-| DigitalOcean | $6 | 1GB | 25GB | USA/EU |
-| AWS Lightsail | $5 | 1GB | 20GB | USA/EU |
-
-**Infomaniak Advantages:**
-- ✅ More RAM (4GB vs 1GB)
-- ✅ Faster storage (NVMe)
-- ✅ Swiss privacy laws
-- ✅ Unlimited bandwidth
-- ✅ Better support (Swiss/French/English)
-
----
-
-## 🔄 Backup Strategy
-
-### Automated Backups
 ```bash
-# Create backup script
-nano ~/backup.sh
-```
+# Real-time monitoring
+htop
 
-**Add:**
-```bash
-#!/bin/bash
-DATE=$(date +%Y%m%d)
-BACKUP_DIR="/home/gdrive/backups"
-mkdir -p $BACKUP_DIR
+# Disk usage
+df -h
 
-# Backup config
-tar -czf $BACKUP_DIR/config-$DATE.tar.gz ~/Otter-Transcripts/config/
-
-# Backup data
-tar -czf $BACKUP_DIR/data-$DATE.tar.gz ~/Otter-Transcripts/gdrive_transcripts/
-
-# Keep only last 7 days
-find $BACKUP_DIR -name "*.tar.gz" -mtime +7 -delete
-
-echo "Backup completed: $DATE"
-```
-
-**Make executable and schedule:**
-```bash
-chmod +x ~/backup.sh
-
-# Add to crontab (runs daily at 2 AM)
-crontab -e
-# Add: 0 2 * * * /home/gdrive/backup.sh
-```
-
----
-
-## ❌ Troubleshooting
-
-### Service Won't Start
-```bash
-# Check detailed status
-sudo systemctl status gdrive-monitor -l
-
-# Check logs
-sudo journalctl -u gdrive-monitor -n 50
-
-# Test manually
-cd ~/Otter-Transcripts
-source venv/bin/activate
-python run_gdrive.py batch
-```
-
-### Permission Errors
-```bash
-# Fix ownership
-sudo chown -R gdrive:gdrive ~/Otter-Transcripts
-
-# Fix permissions
-chmod +x run_gdrive.py
-```
-
-### Out of Memory
-```bash
-# Check memory usage
+# Memory usage
 free -h
 
-# If needed, add swap
-sudo fallocate -l 2G /swapfile
-sudo chmod 600 /swapfile
-sudo mkswap /swapfile
-sudo swapon /swapfile
-# Make permanent
-echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+# Service resource usage
+systemctl status unified-agent
 ```
 
-### Google Drive Connection Issues
+### Optimize Configuration
+
+For better performance on VPS:
+
 ```bash
-# Re-authenticate
-cd ~/Otter-Transcripts
-source venv/bin/activate
-rm config/token.pickle
-python run_gdrive.py setup
+# In .env file:
+LOG_LEVEL=WARNING  # Reduce log verbosity
+GDRIVE_MONITOR_INTERVAL=300  # Poll less frequently (5 min)
 ```
-
----
-
-## ✅ Success Checklist
-
-After deployment, verify:
-
-- [ ] VPS is accessible via SSH
-- [ ] Python 3.11 is installed
-- [ ] Application dependencies are installed
-- [ ] Configuration files are properly set
-- [ ] Google OAuth credentials are uploaded
-- [ ] Google Drive authentication completed
-- [ ] Monitor service is running (`systemctl status gdrive-monitor`)
-- [ ] Chatbot service is running (optional)
-- [ ] Firewall is configured
-- [ ] Logs are being written
-- [ ] Test file processed successfully
-- [ ] Backups are scheduled
-- [ ] Monitoring is accessible
 
 ---
 
 ## 📞 Support
 
-**Infomaniak Support:**
-- Email: support@infomaniak.com
-- Phone: +41 22 820 35 44
-- Chat: Available in dashboard
-- Languages: English, French, German, Italian
+### Infomaniak Support
+- **Email:** support@infomaniak.com
+- **Phone:** +41 22 820 35 44
+- **Languages:** English, French, German, Italian
 
-**Your Application Logs:**
-- Monitor: `~/gdrive-monitor.log`
-- Chatbot: `~/chatbot.log`
-- Errors: `~/gdrive-monitor-error.log`
-
----
-
-## 🎉 You're Done!
-
-Your Google Drive RAG pipeline is now:
-- ✅ Running 24/7 on Infomaniak VPS
-- ✅ Automatically processing Google Drive documents
-- ✅ Hosted in privacy-focused Switzerland
-- ✅ Accessible via web chatbot interface
-- ✅ Monitored and logged
-- ✅ Backed up daily
-
-**Total Setup Time**: ~60 minutes
-**Monthly Cost**: ~€6
-**Uptime**: 99.9%+
+### Documentation
+- **Production Checklist:** [PRODUCTION_CHECKLIST.md](PRODUCTION_CHECKLIST.md)
+- **README:** [README.md](README.md)
+- **Technical Docs:** [TECHNICAL_DOCUMENTATION.md](TECHNICAL_DOCUMENTATION.md)
 
 ---
 
-**Last Updated**: October 2025
+## ✅ Post-Deployment Checklist
+
+Use [PRODUCTION_CHECKLIST.md](PRODUCTION_CHECKLIST.md) to verify:
+
+- [ ] Service is running
+- [ ] Health endpoint responds
+- [ ] Logs show no errors
+- [ ] Google Drive monitoring active (if enabled)
+- [ ] WhatsApp bot responds (if enabled)
+- [ ] Backups configured
+- [ ] Monitoring setup
+
+---
+
+**Last Updated:** October 2025  
+**Deployment Time:** ~5-10 minutes  
+**Difficulty:** Easy (automated)

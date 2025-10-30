@@ -54,12 +54,12 @@ In the "Secrets" section of Advanced settings, paste:
 
 ```toml
 [neo4j]
-uri = "bolt://220210fe.databases.neo4j.io:7687"
+uri = "bolt://YOUR_NEO4J_INSTANCE.databases.neo4j.io:7687"
 user = "neo4j"
-password = "uefo7_cCO4KdvrpS3knrhJ39Pwn2KDrFD0NCH4SKHv8"
+password = "YOUR_NEO4J_PASSWORD_HERE"
 
 [mistral]
-api_key = "xELPoQf6Msav4CZ7fPEAfcKnJTa4UOxn"
+api_key = "YOUR_MISTRAL_API_KEY_HERE"
 model = "mistral-small-latest"
 ```
 

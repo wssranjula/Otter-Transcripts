@@ -1,0 +1,185 @@
+{
+  "services": {
+    "whatsapp": {
+      "enabled": "${WHATSAPP_ENABLED:true}",
+      "required": false
+    },
+    "gdrive": {
+      "enabled": "${GDRIVE_ENABLED:true}",
+      "required": false,
+      "auto_start": "${GDRIVE_AUTO_START:true}",
+      "monitor_interval_seconds": "${GDRIVE_MONITOR_INTERVAL:60}"
+    }
+  },
+  "neo4j": {
+    "uri": "${NEO4J_URI}",
+    "user": "${NEO4J_USER:neo4j}",
+    "password": "${NEO4J_PASSWORD}",
+    "database": "${NEO4J_DATABASE:neo4j}"
+  },
+  "mistral": {
+    "api_key": "${MISTRAL_API_KEY}",
+    "model": "${MISTRAL_MODEL:mistral-large-latest}",
+    "embed_model": "${MISTRAL_EMBED_MODEL:mistral-embed}",
+    "timeout": 120,
+    "max_retries": 3
+  },
+  "postgres": {
+    "enabled": "${POSTGRES_ENABLED:false}",
+    "connection_string": "${POSTGRES_CONNECTION_STRING}"
+  },
+  "google_drive": {
+    "credentials_file": "${GOOGLE_DRIVE_CREDENTIALS_FILE:config/credentials.json}",
+    "token_file": "${GOOGLE_DRIVE_TOKEN_FILE:config/token.pickle}",
+    "state_file": "config/gdrive_state.json",
+    "folder_name": "${GOOGLE_DRIVE_FOLDER_NAME:RAG Documents}",
+    "folder_id": "${GOOGLE_DRIVE_FOLDER_ID:}"
+  },
+  "twilio": {
+    "account_sid": "${TWILIO_ACCOUNT_SID}",
+    "auth_token": "${TWILIO_AUTH_TOKEN}",
+    "whatsapp_number": "${TWILIO_WHATSAPP_NUMBER}",
+    "bot_trigger_words": ["@agent", "@bot", "hey agent", "hey bot"]
+  },
+  "whatsapp": {
+    "response_timeout_seconds": 60,
+    "send_processing_indicator": true,
+    "max_message_length": 1500,
+    "auto_split_long_messages": true,
+    "prefer_concise_responses": true,
+    "context_limit": 5,
+    "enable_group_chat": true
+  },
+  "embeddings": {
+    "enabled": "${POSTGRES_ENABLED:false}",
+    "provider": "mistral",
+    "model": "${MISTRAL_EMBED_MODEL:mistral-embed}",
+    "dimensions": 1024
+  },
+  "processing": {
+    "auto_load_to_neo4j": true,
+    "clear_temp_files": false,
+    "batch_processing": false,
+    "temp_transcript_dir": "gdrive_transcripts",
+    "output_json": "knowledge_graph_gdrive.json"
+  },
+  "paths": {
+    "transcript_directory": "data/transcripts",
+    "output_json": "knowledge_graph_rag.json"
+  },
+  "parsing": {
+    "organizations": [
+      "Climate Hub",
+      "Outlier",
+      "Federation of American Scientists",
+      "FAS",
+      "CARB",
+      "California Air Resources Board",
+      "UNEP",
+      "UNEA",
+      "Chesapeake Climate Action Network",
+      "DSG",
+      "Degrees",
+      "Ocean Visions",
+      "TCCRI",
+      "Clear Path",
+      "ACCA",
+      "FAI",
+      "Bloomberg",
+      "Navigation Fund",
+      "Spitzer",
+      "QCF",
+      "Avaaz",
+      "Purpose",
+      "EDF",
+      "ARIA"
+    ],
+    "countries": [
+      "United States",
+      "USA",
+      "US",
+      "United Kingdom",
+      "UK",
+      "Kenya",
+      "Germany",
+      "India",
+      "China",
+      "Japan",
+      "Australia",
+      "Brazil",
+      "Canada",
+      "France",
+      "Italy",
+      "South Africa",
+      "Mexico",
+      "Spain",
+      "Netherlands",
+      "Switzerland",
+      "Sweden",
+      "Norway",
+      "Denmark",
+      "Finland",
+      "Belgium",
+      "Austria",
+      "Ireland",
+      "New Zealand",
+      "Singapore",
+      "UAE",
+      "Saudi Arabia",
+      "Israel",
+      "South Korea",
+      "Argentina",
+      "Chile",
+      "Colombia"
+    ],
+    "people": []
+  },
+  "sybil": {
+    "identity": {
+      "name": "Sybil",
+      "role": "Climate Hub's internal knowledge assistant",
+      "organization": "Climate Hub"
+    },
+    "behavior": {
+      "default_response_length": "concise",
+      "use_smart_brevity": true,
+      "show_confidence_levels": true,
+      "data_freshness_threshold_days": 60,
+      "max_context_meetings": 5,
+      "include_sources": true
+    },
+    "timeouts": {
+      "llm_call_timeout": 30,
+      "neo4j_query_timeout": 10,
+      "total_query_timeout": 60
+    }
+  },
+  "logging": {
+    "level": "${LOG_LEVEL:INFO}",
+    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    "file": "unified_agent.log",
+    "max_bytes": 10485760,
+    "backup_count": 5
+  },
+  "resilience": {
+    "neo4j": {
+      "circuit_breaker_threshold": 5,
+      "circuit_breaker_timeout": 60,
+      "max_retries": 3,
+      "retry_delay": 1.0
+    },
+    "mistral": {
+      "circuit_breaker_threshold": 3,
+      "circuit_breaker_timeout": 30,
+      "max_retries": 3,
+      "retry_delay": 2.0
+    },
+    "gdrive": {
+      "circuit_breaker_threshold": 5,
+      "circuit_breaker_timeout": 120,
+      "max_retries": 3,
+      "retry_delay": 5.0
+    }
+  }
+}
+

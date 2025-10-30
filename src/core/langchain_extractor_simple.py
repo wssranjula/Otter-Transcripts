@@ -297,7 +297,7 @@ def test_extractor():
     """Test simplified extractor"""
     import os
 
-    api_key = os.getenv("MISTRAL_API_KEY") or "xELPoQf6Msav4CZ7fPEAfcKnJTa4UOxn"
+    api_key = os.getenv("MISTRAL_API_KEY") or "YOUR_MISTRAL_API_KEY_HERE"
 
     # Sample with both business and casual content
     sample_text = """
