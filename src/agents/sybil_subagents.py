@@ -242,8 +242,8 @@ def create_task_tool(tools_dict: dict, subagents: list[SubAgent], llm):
         # Create sub-agent without custom state schema (use default)
         agents[_agent["name"]] = create_react_agent(
             llm,
-            prompt=_agent["prompt"],
-            tools=_tools
+            tools=_tools,
+            state_modifier=_agent["prompt"]
         )
     
     # Generate description for supervisor
