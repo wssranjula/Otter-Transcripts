@@ -195,7 +195,7 @@ def main():
     
     # Load configuration
     try:
-        config = load_config("config/gdrive_config.json")
+        config = load_config("config/config.json")
         
         # Validate configuration
         if not validate_config(config):
