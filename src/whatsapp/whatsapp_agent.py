@@ -12,6 +12,7 @@ import json
 
 from src.whatsapp.twilio_client import TwilioWhatsAppClient
 from src.whatsapp.conversation_manager import ConversationManager
+from src.whatsapp.whitelist_checker import WhitelistChecker
 from src.agents.sybil_subagents import SybilWithSubAgents
 
 logger = logging.getLogger(__name__)
@@ -60,6 +61,31 @@ class WhatsAppAgent:
         )
         
         logger.info("Sybil agent initialized with sub-agent architecture (query-agent + analysis-agent)")
+        
+        # Initialize whitelist checker (requires admin_db)
+        self.whitelist_checker = None
+        self.whitelist_enabled = config.get('whatsapp', {}).get('whitelist_enabled', False)
+        
+        if self.whitelist_enabled:
+            try:
+                from src.admin.admin_db import AdminDatabase
+                postgres_conn_whitelist = config.get('postgres', {}).get('connection_string')
+                
+                if not postgres_conn_whitelist:
+                    logger.error("Whitelist enabled but postgres connection_string not configured!")
+                    logger.error("Either disable whitelist or configure postgres in config.json")
+                else:
+                    admin_db = AdminDatabase(postgres_conn_whitelist)
+                    self.whitelist_checker = WhitelistChecker(admin_db, config)
+                    logger.info("[WHITELIST] Whitelist checker initialized successfully")
+                    logger.info("[WHITELIST] Only whitelisted numbers will be able to chat")
+                    
+            except Exception as e:
+                logger.error(f"[WHITELIST] Failed to initialize whitelist checker: {e}", exc_info=True)
+                logger.error("[WHITELIST] Whitelist is enabled but not working - will BLOCK all users for security")
+                self.whitelist_checker = None
+        else:
+            logger.info("[WHITELIST] Whitelist is disabled - all numbers can chat")
         
         # Bot configuration
         whatsapp_config = config.get('whatsapp', {})
@@ -122,11 +148,38 @@ class WhatsAppAgent:
         profile_name = message_data['profile_name']
         user_phone = message_data['wa_id']
         
-        logger.info(f"Received message from {profile_name} ({user_phone}): {message_body[:100]}")
+        # Log ALL incoming messages
+        logger.info(f"[WHATSAPP] Incoming message from {profile_name} | Phone: {user_phone} | Number: {from_number}")
+        logger.info(f"[WHATSAPP] Message preview: {message_body[:100]}...")
+        
+        # Check whitelist authorization (if enabled)
+        if self.whitelist_enabled:
+            # If whitelist is enabled but checker failed to initialize, block everyone for security
+            if not self.whitelist_checker:
+                logger.error(f"[WHITELIST] Whitelist enabled but checker not initialized - BLOCKING {user_phone}")
+                error_msg = "⚠️ Bot is currently in maintenance mode. Please try again later."
+                await self.send_response(from_number, error_msg)
+                return None
+            
+            # Check if user is authorized
+            is_authorized = self.whitelist_checker.is_authorized(from_number)
+            
+            if is_authorized:
+                logger.info(f"[WHITELIST] ✓ AUTHORIZED - {user_phone} ({profile_name})")
+            else:
+                logger.warning(f"[WHITELIST] ✗ BLOCKED - {user_phone} ({profile_name}) - Not in whitelist")
+                unauthorized_msg = self.whitelist_checker.get_unauthorized_message()
+                
+                # Send unauthorized message immediately
+                await self.send_response(from_number, unauthorized_msg)
+                
+                # Log the rejection
+                logger.warning(f"[WHITELIST] Rejected message from {user_phone}: '{message_body[:50]}...'")
+                return None  # Already sent response, return None
 
         # Check if bot is mentioned
         if not self.is_bot_mentioned(message_body):
-            logger.info("Bot not mentioned, ignoring message")
+            logger.info("[WHATSAPP] Bot not mentioned, ignoring message")
             return None
 
         # Check for special commands
@@ -236,7 +289,7 @@ Please answer considering the conversation context above.{concise_prompt}"""
             enhanced_question = f"""{question}{concise_prompt}"""
         
         # Use Sybil agent to answer (includes all smart features)
-        answer = self.sybil_agent.query(enhanced_question, verbose=False)
+        answer = self.sybil_agent.query(enhanced_question, verbose=False, source="whatsapp")
         
         return answer
 

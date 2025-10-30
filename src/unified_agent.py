@@ -8,6 +8,8 @@ import asyncio
 from typing import Optional, Dict
 from fastapi import FastAPI, Request, Response, BackgroundTasks, HTTPException
 from fastapi.responses import PlainTextResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +34,41 @@ except ImportError as e:
     GDRIVE_AVAILABLE = False
     GoogleDriveRAGPipeline = None
     BackgroundGDriveMonitor = None
+
+# Import Admin components (optional)
+try:
+    from src.admin.admin_db import AdminDatabase
+    from src.agents.sybil_subagents import SybilWithSubAgents
+    ADMIN_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"Admin components not available: {e}")
+    ADMIN_AVAILABLE = False
+    AdminDatabase = None
+    SybilWithSubAgents = None
+
+
+# ========================================
+# Pydantic Models for Admin API
+# ========================================
+
+class ChatRequest(BaseModel):
+    message: str
+
+class ChatResponse(BaseModel):
+    response: str
+    timestamp: str
+
+class WhitelistEntry(BaseModel):
+    phone_number: str
+    name: Optional[str] = None
+    notes: Optional[str] = None
+    added_by: Optional[str] = None
+
+class WhitelistUpdate(BaseModel):
+    phone_number: Optional[str] = None
+    name: Optional[str] = None
+    notes: Optional[str] = None
+    is_active: Optional[bool] = None
 
 
 def create_unified_app(config: dict) -> FastAPI:
@@ -69,9 +106,26 @@ def create_unified_app(config: dict) -> FastAPI:
         openapi_url="/openapi.json"  # OpenAPI schema
     )
 
+    # Add CORS middleware for admin panel
+    allowed_origins = config.get('admin', {}).get('allowed_origins', [
+        "http://localhost:3000",
+        "https://*.vercel.app"
+    ])
+    
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allowed_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    
+    logger.info(f"CORS enabled for origins: {allowed_origins}")
+
     # Check which services are enabled
     whatsapp_enabled = config.get('services', {}).get('whatsapp', {}).get('enabled', True)
     gdrive_enabled = config.get('services', {}).get('gdrive_monitor', {}).get('enabled', True)
+    admin_enabled = config.get('services', {}).get('admin', {}).get('enabled', True)
 
     # Check availability
     if whatsapp_enabled and not WHATSAPP_AVAILABLE:
@@ -84,7 +138,7 @@ def create_unified_app(config: dict) -> FastAPI:
         logger.error("Install with: pip install -r requirements_gdrive.txt")
         gdrive_enabled = False
 
-    logger.info(f"Services configuration: WhatsApp={whatsapp_enabled}, GDrive={gdrive_enabled}")
+    logger.info(f"Services configuration: WhatsApp={whatsapp_enabled}, GDrive={gdrive_enabled}, Admin={admin_enabled}")
 
     # Initialize WhatsApp Agent (if enabled)
     whatsapp_agent: Optional[WhatsAppAgent] = None
@@ -129,6 +183,45 @@ def create_unified_app(config: dict) -> FastAPI:
             if config.get('services', {}).get('gdrive', {}).get('required', False):
                 raise
 
+    # Initialize Admin Database and Sybil Agent (if enabled)
+    admin_db: Optional[AdminDatabase] = None
+    admin_sybil: Optional[SybilWithSubAgents] = None
+    
+    if admin_enabled and ADMIN_AVAILABLE:
+        try:
+            logger.info("Initializing Admin services...")
+            
+            # Check if PostgreSQL is configured
+            postgres_conn = config.get('postgres', {}).get('connection_string')
+            if not postgres_conn:
+                logger.error("Admin service enabled but PostgreSQL connection not configured")
+                admin_enabled = False
+            else:
+                # Initialize admin database
+                admin_db = AdminDatabase(postgres_conn)
+                logger.info("[OK] Admin database initialized")
+                
+                # Initialize Sybil agent for admin chat
+                neo4j_config = config['neo4j']
+                mistral_key = config.get('mistral', {}).get('api_key', '')
+                mistral_model = config.get('mistral', {}).get('model', 'mistral-large-latest')
+                
+                admin_sybil = SybilWithSubAgents(
+                    neo4j_uri=neo4j_config['uri'],
+                    neo4j_user=neo4j_config['user'],
+                    neo4j_password=neo4j_config['password'],
+                    mistral_api_key=mistral_key,
+                    config=config,
+                    model=mistral_model
+                )
+                logger.info("[OK] Admin Sybil agent initialized")
+                
+        except Exception as e:
+            logger.error(f"Failed to initialize Admin services: {e}", exc_info=True)
+            if config.get('services', {}).get('admin', {}).get('required', False):
+                raise
+            admin_enabled = False
+
     # Startup event
     @app.on_event("startup")
     async def startup():
@@ -168,6 +261,14 @@ def create_unified_app(config: dict) -> FastAPI:
             whatsapp_agent.close()
             logger.info("[OK] WhatsApp agent closed")
         
+        if admin_db:
+            admin_db.close()
+            logger.info("[OK] Admin database closed")
+        
+        if admin_sybil:
+            admin_sybil.close()
+            logger.info("[OK] Admin Sybil agent closed")
+        
         logger.info("Shutdown complete")
 
     # ===== ROOT ENDPOINTS =====
@@ -189,7 +290,8 @@ def create_unified_app(config: dict) -> FastAPI:
             "version": "1.0.0",
             "services": {
                 "whatsapp": whatsapp_enabled,
-                "gdrive_monitor": gdrive_enabled
+                "gdrive_monitor": gdrive_enabled,
+                "admin": admin_enabled
             },
             "endpoints": {
                 "health": "/health",
@@ -577,6 +679,312 @@ def create_unified_app(config: dict) -> FastAPI:
             
             except Exception as e:
                 logger.error(f"Error getting config: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+
+    # ===== ADMIN PANEL ENDPOINTS =====
+
+    if admin_enabled and admin_db and admin_sybil:
+        
+        @app.post("/admin/chat", tags=["Admin"], response_model=ChatResponse)
+        async def admin_chat(chat_request: ChatRequest):
+            """
+            # Admin Chat with Sybil
+            
+            Send a message to Sybil and get a response.
+            
+            **Use case:** Admin panel chat interface
+            
+            **Request body:**
+            - message: Question or query for Sybil
+            
+            **Response:**
+            - response: Sybil's answer
+            - timestamp: Response timestamp
+            """
+            try:
+                from datetime import datetime
+                
+                # Get question
+                question = chat_request.message
+                
+                if not question or not question.strip():
+                    raise HTTPException(status_code=400, detail="Message cannot be empty")
+                
+                logger.info(f"Admin chat query: {question[:100]}...")
+                
+                # Query Sybil using sub-agent architecture
+                # Run in thread pool to avoid blocking
+                answer = await asyncio.to_thread(
+                    admin_sybil.query,
+                    question,
+                    verbose=False,
+                    source="admin_panel"
+                )
+                
+                # Strip emojis for logging to avoid encoding issues
+                log_answer = answer.encode('ascii', errors='ignore').decode('ascii')
+                logger.info(f"Admin chat response: {log_answer[:100]}...")
+                
+                return ChatResponse(
+                    response=answer,
+                    timestamp=datetime.utcnow().isoformat() + "Z"
+                )
+                
+            except Exception as e:
+                logger.error(f"Error in admin chat: {e}", exc_info=True)
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @app.get("/admin/chat/health", tags=["Admin"])
+        async def admin_chat_health():
+            """
+            # Admin Chat Health Check
+            
+            Verify that Sybil agent is initialized and ready.
+            """
+            try:
+                if admin_sybil is None:
+                    return {
+                        "status": "unavailable",
+                        "message": "Sybil agent not initialized"
+                    }
+                
+                return {
+                    "status": "ready",
+                    "message": "Sybil agent is ready",
+                    "agent_type": "sybil_subagents"
+                }
+                
+            except Exception as e:
+                logger.error(f"Error checking chat health: {e}")
+                return {
+                    "status": "error",
+                    "message": str(e)
+                }
+        
+        # ===== WHITELIST MANAGEMENT ENDPOINTS =====
+        
+        @app.get("/admin/whitelist", tags=["Admin"])
+        async def get_whitelist(include_inactive: bool = False):
+            """
+            # Get WhatsApp Whitelist
+            
+            Retrieve all whitelisted phone numbers.
+            
+            **Query parameters:**
+            - include_inactive: Include inactive entries (default: false)
+            
+            **Returns:**
+            - List of whitelist entries with phone numbers, names, notes, and metadata
+            """
+            try:
+                entries = admin_db.get_all_whitelist(include_inactive=include_inactive)
+                
+                # Convert datetime objects to ISO strings for JSON serialization
+                for entry in entries:
+                    if entry.get('created_at'):
+                        entry['created_at'] = entry['created_at'].isoformat()
+                    if entry.get('updated_at'):
+                        entry['updated_at'] = entry['updated_at'].isoformat()
+                
+                return {
+                    "count": len(entries),
+                    "entries": entries
+                }
+                
+            except Exception as e:
+                logger.error(f"Error getting whitelist: {e}", exc_info=True)
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @app.post("/admin/whitelist", tags=["Admin"])
+        async def add_whitelist(entry: WhitelistEntry):
+            """
+            # Add to Whitelist
+            
+            Add a new phone number to the whitelist.
+            
+            **Request body:**
+            - phone_number: Phone number in E.164 format (e.g., +1234567890)
+            - name: Contact name (optional)
+            - notes: Additional notes (optional)
+            - added_by: Username who added this entry (optional)
+            
+            **Returns:**
+            - Created whitelist entry
+            """
+            try:
+                created = admin_db.add_to_whitelist(
+                    phone_number=entry.phone_number,
+                    name=entry.name,
+                    notes=entry.notes,
+                    added_by=entry.added_by
+                )
+                
+                # Convert datetime to ISO string
+                if created.get('created_at'):
+                    created['created_at'] = created['created_at'].isoformat()
+                if created.get('updated_at'):
+                    created['updated_at'] = created['updated_at'].isoformat()
+                
+                return created
+                
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e))
+            except Exception as e:
+                logger.error(f"Error adding to whitelist: {e}", exc_info=True)
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @app.put("/admin/whitelist/{entry_id}", tags=["Admin"])
+        async def update_whitelist_entry(entry_id: int, update: WhitelistUpdate):
+            """
+            # Update Whitelist Entry
+            
+            Update an existing whitelist entry.
+            
+            **Path parameters:**
+            - entry_id: Whitelist entry ID
+            
+            **Request body:** (all fields optional)
+            - phone_number: New phone number
+            - name: New name
+            - notes: New notes
+            - is_active: Active status (true/false)
+            
+            **Returns:**
+            - Updated whitelist entry
+            """
+            try:
+                updated = admin_db.update_whitelist(
+                    entry_id=entry_id,
+                    phone_number=update.phone_number,
+                    name=update.name,
+                    notes=update.notes,
+                    is_active=update.is_active
+                )
+                
+                # Convert datetime to ISO string
+                if updated.get('created_at'):
+                    updated['created_at'] = updated['created_at'].isoformat()
+                if updated.get('updated_at'):
+                    updated['updated_at'] = updated['updated_at'].isoformat()
+                
+                return updated
+                
+            except ValueError as e:
+                raise HTTPException(status_code=404, detail=str(e))
+            except Exception as e:
+                logger.error(f"Error updating whitelist: {e}", exc_info=True)
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @app.patch("/admin/whitelist/{entry_id}/toggle", tags=["Admin"])
+        async def toggle_whitelist_status(entry_id: int):
+            """
+            # Toggle Whitelist Status
+            
+            Toggle active/inactive status of a whitelist entry.
+            
+            **Path parameters:**
+            - entry_id: Whitelist entry ID
+            
+            **Returns:**
+            - Updated whitelist entry with new status
+            """
+            try:
+                updated = admin_db.toggle_whitelist_status(entry_id)
+                
+                # Convert datetime to ISO string
+                if updated.get('created_at'):
+                    updated['created_at'] = updated['created_at'].isoformat()
+                if updated.get('updated_at'):
+                    updated['updated_at'] = updated['updated_at'].isoformat()
+                
+                return updated
+                
+            except ValueError as e:
+                raise HTTPException(status_code=404, detail=str(e))
+            except Exception as e:
+                logger.error(f"Error toggling whitelist status: {e}", exc_info=True)
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @app.delete("/admin/whitelist/{entry_id}", tags=["Admin"])
+        async def delete_whitelist_entry(entry_id: int, hard_delete: bool = False):
+            """
+            # Delete Whitelist Entry
+            
+            Remove a phone number from the whitelist.
+            
+            **Path parameters:**
+            - entry_id: Whitelist entry ID
+            
+            **Query parameters:**
+            - hard_delete: Permanently delete from database (default: false, soft delete)
+            
+            **Returns:**
+            - Success message
+            """
+            try:
+                if hard_delete:
+                    success = admin_db.hard_delete_from_whitelist(entry_id)
+                else:
+                    success = admin_db.delete_from_whitelist(entry_id)
+                
+                if success:
+                    return {
+                        "status": "deleted",
+                        "entry_id": entry_id,
+                        "hard_delete": hard_delete
+                    }
+                else:
+                    raise HTTPException(status_code=404, detail=f"Entry {entry_id} not found")
+                    
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Error deleting from whitelist: {e}", exc_info=True)
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @app.get("/admin/whitelist/check/{phone_number}", tags=["Admin"])
+        async def check_whitelist(phone_number: str):
+            """
+            # Check Whitelist Status
+            
+            Check if a phone number is whitelisted.
+            
+            **Path parameters:**
+            - phone_number: Phone number to check (URL encoded)
+            
+            **Returns:**
+            - is_whitelisted: Boolean indicating if number is whitelisted and active
+            """
+            try:
+                is_whitelisted = admin_db.check_phone_whitelisted(phone_number)
+                
+                return {
+                    "phone_number": phone_number,
+                    "is_whitelisted": is_whitelisted
+                }
+                
+            except Exception as e:
+                logger.error(f"Error checking whitelist: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @app.get("/admin/whitelist/stats", tags=["Admin"])
+        async def get_whitelist_stats():
+            """
+            # Whitelist Statistics
+            
+            Get whitelist statistics (total, active, inactive counts).
+            
+            **Returns:**
+            - total: Total entries
+            - active: Active entries
+            - inactive: Inactive entries
+            """
+            try:
+                stats = admin_db.get_whitelist_stats()
+                return stats
+                
+            except Exception as e:
+                logger.error(f"Error getting whitelist stats: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
 
     return app

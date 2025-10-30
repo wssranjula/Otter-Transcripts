@@ -9,8 +9,13 @@ from langchain_core.messages import ToolMessage
 from langchain_core.tools import BaseTool, InjectedToolCallId, tool
 from langgraph.prebuilt import create_react_agent
 from langchain_mistralai import ChatMistralAI
+import logging
+import time
 
 from src.agents.cypher_agent import Neo4jCypherTools
+from src.core.agent_logger import get_monitor
+
+logger = logging.getLogger(__name__)
 
 
 class SubAgent(TypedDict):
@@ -27,30 +32,53 @@ class SubAgent(TypedDict):
 
 QUERY_SUBAGENT_PROMPT = """You are a database query specialist for Climate Hub's knowledge graph.
 
-    **Your Role**: Execute Neo4j Cypher queries and return CONCISE summaries of results.
+**Your Role**: Execute Neo4j Cypher queries and return CONCISE summaries of results.
 
-    **Critical Instructions**:
-    1. Execute the requested query using available tools
-    2. Analyze the results
-    3. Return a BRIEF summary (max 500 words) highlighting:
-    - Key findings
-    - Number of results
-    - Important dates, people, or decisions mentioned
-    - Any notable patterns
+**Critical Instructions**:
+1. Check database schema FIRST using get_database_schema() to understand available properties
+2. Execute the requested query using execute_cypher_query()
+3. If query fails with syntax error, analyze the error and retry with corrected query
+4. Maximum 3 retry attempts with different approaches
+5. Return a BRIEF summary (max 500 words) of results
 
-    **Important**: Your response will be sent back to the main agent, so be concise!
-    Focus on WHAT was found, not HOW you found it.
+**Retry Strategy When Query Fails**:
+- **Attempt 1**: Try the initial query
+- **If fails**: Parse error message, identify issue (syntax, property name, function)
+- **Attempt 2**: Fix the specific error (e.g., remove unsupported functions like datetime().subtract())
+- **If fails again**: Try simpler query without complex filters or functions
+- **Attempt 3**: Use basic MATCH with simple WHERE conditions
 
-    **Format**:
-    ```
-    Found X results:
-    - Key finding 1
-    - Key finding 2
-    - Key finding 3
+**Common Neo4j Issues to Avoid**:
+- ❌ `datetime().subtract(duration())` → ✅ Use date strings directly or simple comparisons
+- ❌ Non-existent properties (check schema first) → ✅ Use only properties that exist
+- ❌ `{property: CONTAINS 'value'}` → ✅ Use `WHERE property CONTAINS 'value'`
+- ❌ Complex nested conditions → ✅ Simplify with basic AND/OR
+- ❌ Missing parentheses in WHERE → ✅ Add proper parentheses for multiple conditions
 
-    Sources: Meeting titles and dates
-    ```
-    """
+**Cypher Syntax Reminders**:
+- Property matching: `(n:Label {property: 'exact value'})` for exact matches
+- Text search: `WHERE n.property CONTAINS 'substring'` for partial matches
+- Never mix: Don't use `{property: CONTAINS 'value'}` - syntax error!
+
+**Important**: Be persistent! Try different approaches if first query fails.
+Focus on WHAT was found, not HOW you found it in your final response.
+
+**Response Format** (after successful query):
+```
+Found X results:
+- Key finding 1
+- Key finding 2
+- Key finding 3
+
+Sources: Meeting titles and dates
+```
+
+**If All Retries Fail**:
+```
+Unable to retrieve data after 3 attempts. Last error: [error description]
+Suggestion: Try simplifying the query or checking the schema.
+```
+"""
 
 ANALYSIS_SUBAGENT_PROMPT = """You are a data analysis specialist for Climate Hub.
 
@@ -108,8 +136,10 @@ SUPERVISOR_PROMPT = """You are Sybil, Climate Hub's Internal AI Assistant.
    - Answer directly from your knowledge
 
 2. **Medium queries** (need database):
-   Step 1: Delegate to query-agent to get data
+   Step 1: Delegate to query-agent to get data (query-agent will auto-retry on failures)
    Step 2: Synthesize answer with citations
+   
+   Note: query-agent has built-in retry logic and will attempt up to 3 times with corrected queries
 
 3. **Complex queries** (database + analysis):
    Step 1: Delegate to query-agent to get data
@@ -161,6 +191,7 @@ You:
 **Important Guidelines**:
 - **Delegate execution to sub-agents** (query-agent, analysis-agent)
 - **Manage coordination yourself** (TODO planning, progress tracking)
+- **Trust sub-agents to retry**: query-agent automatically retries failed queries (up to 3 attempts)
 - Use TODOs only for very complex multi-step queries (3+ sub-agent calls)
 - Each sub-agent returns CONCISE summaries (prevents context overflow)
 - You synthesize sub-agent results into user-friendly answers
@@ -314,25 +345,83 @@ class SybilWithSubAgents:
         # Import TODO tools but we'll create wrappers without InjectedToolCallId
         from src.core.todo_tools import write_todos as _write_todos, read_todos as _read_todos, mark_todo_completed as _mark_todo_completed
         
-        # Create Cypher tools as callables
+        # Create Cypher tools as callables with monitoring
         @tool
         def get_database_schema() -> str:
             """Get Neo4j database schema"""
-            return self.neo4j_tools.get_schema()
+            monitor = get_monitor()
+            start_time = time.time()
+            try:
+                result = self.neo4j_tools.get_schema()
+                duration = time.time() - start_time
+                monitor.log_tool_call("get_database_schema", True, duration)
+                return result
+            except Exception as e:
+                duration = time.time() - start_time
+                monitor.log_tool_call("get_database_schema", False, duration, str(e))
+                raise
         
         @tool
         def execute_cypher_query(cypher_query: str) -> str:
-            """Execute Cypher query against Neo4j"""
+            """Execute Cypher query against Neo4j. Returns success/error with detailed feedback."""
             import json
+            monitor = get_monitor()
+            start_time = time.time()
+            
             try:
                 results = self.neo4j_tools.execute_cypher(cypher_query)
+                duration = time.time() - start_time
+                
+                # Log successful query
+                monitor.log_query_attempt(
+                    cypher_query=cypher_query,
+                    success=True,
+                    result_count=len(results)
+                )
+                monitor.log_tool_call("execute_cypher_query", True, duration)
+                
+                logger.info(f"[QUERY] Success: {len(results)} results in {duration:.2f}s")
+                
                 return json.dumps({
                     "status": "success",
                     "results": results,
-                    "count": len(results)
+                    "count": len(results),
+                    "message": f"Query executed successfully. Found {len(results)} results."
                 }, indent=2, default=str)
+                
             except Exception as e:
-                return json.dumps({"status": "error", "error": str(e)})
+                duration = time.time() - start_time
+                error_msg = str(e)
+                
+                # Parse error to provide helpful retry guidance
+                retry_hint = ""
+                if "datetime" in error_msg.lower():
+                    retry_hint = "Hint: Neo4j datetime functions may not be available. Try using simple date string comparisons instead."
+                elif "does not exist" in error_msg.lower():
+                    retry_hint = "Hint: Property doesn't exist. Check schema with get_database_schema() first."
+                elif "contains" in error_msg.lower() and "{" in cypher_query:
+                    retry_hint = "Hint: Don't use {property: CONTAINS 'value'}. Use WHERE clause instead: WHERE property CONTAINS 'value'"
+                elif "syntax" in error_msg.lower():
+                    retry_hint = "Hint: Cypher syntax error. Common issues: 1) Use WHERE for CONTAINS, 2) Check parentheses, 3) Verify property names in schema."
+                elif "invalid input" in error_msg.lower():
+                    retry_hint = "Hint: Invalid Cypher syntax. Common fixes: 1) Move CONTAINS to WHERE clause, 2) Check brackets and quotes, 3) Simplify the query."
+                
+                # Log failed query
+                monitor.log_query_attempt(
+                    cypher_query=cypher_query,
+                    success=False,
+                    error=error_msg
+                )
+                monitor.log_tool_call("execute_cypher_query", False, duration, error_msg)
+                
+                logger.warning(f"[QUERY] Failed in {duration:.2f}s: {error_msg[:100]}")
+                
+                return json.dumps({
+                    "status": "error",
+                    "error": error_msg,
+                    "retry_hint": retry_hint,
+                    "suggestion": "Try a simpler query or check the schema for available properties."
+                }, indent=2)
         
         @tool
         def search_content_types(content_type: str, search_term: str, limit: int = 10) -> str:
@@ -420,34 +509,67 @@ class SybilWithSubAgents:
             prompt=supervisor_prompt
         )
     
-    def query(self, user_question: str, verbose: bool = False) -> str:
+    def query(self, user_question: str, verbose: bool = False, source: str = "unknown") -> str:
         """
         Process user query using sub-agent architecture
         
         Args:
             user_question: User's question
             verbose: Print reasoning trace
+            source: Source of query (admin, whatsapp, etc)
         
         Returns:
             Final answer
         """
-        # Initialize state (use default MessagesState format)
-        initial_state = {
-            "messages": [{"role": "user", "content": user_question}]
-        }
+        monitor = get_monitor()
         
-        # Execute supervisor agent
-        result = self.agent.invoke(initial_state)
+        # Start monitoring session
+        session_id = monitor.start_query_session(user_question, source)
+        logger.info(f"[START] Query session {session_id} ({source})")
         
-        if verbose:
-            print("\n" + "="*70)
-            print("SYBIL SUB-AGENT TRACE")
-            print("="*70)
-            for msg in result["messages"]:
-                print(f"\n{msg}")
-        
-        # Return final answer
-        return result["messages"][-1].content
+        try:
+            # Initialize state (use default MessagesState format)
+            initial_state = {
+                "messages": [{"role": "user", "content": user_question}]
+            }
+            
+            # Execute supervisor agent
+            start_time = time.time()
+            result = self.agent.invoke(initial_state)
+            duration = time.time() - start_time
+            
+            # Extract final answer
+            final_answer = result["messages"][-1].content
+            
+            # Count tool calls and sub-agent usage from messages
+            tool_calls = sum(1 for msg in result["messages"] if hasattr(msg, 'tool_calls') and msg.tool_calls)
+            
+            logger.info(f"[SUCCESS] Query completed in {duration:.2f}s ({len(final_answer)} chars)")
+            
+            if verbose:
+                print("\n" + "="*70)
+                print("SYBIL SUB-AGENT TRACE")
+                print("="*70)
+                for msg in result["messages"]:
+                    print(f"\n{msg}")
+            
+            # End monitoring session with success
+            monitor.end_query_session(
+                success=True,
+                final_answer=final_answer
+            )
+            
+            # Return final answer
+            return final_answer
+            
+        except Exception as e:
+            logger.error(f"[ERROR] Query failed: {str(e)}", exc_info=True)
+            
+            # Log error and end session
+            monitor.log_error("query_execution", str(e))
+            monitor.end_query_session(success=False)
+            
+            raise
     
     def close(self):
         """Cleanup resources"""
