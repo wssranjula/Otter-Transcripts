@@ -33,7 +33,7 @@ gdrive_state.json
 # Generated data
 config/knowledge_graph*.json
 knowledge_graph*.json
-
+gdrive.txt
 # Log files (may contain secrets)
 *.log
 *.log.*

@@ -17,7 +17,8 @@
 ### Step 2: Connect to VPS
 
 ```bash
-ssh root@YOUR_VPS_IP
+
+ssh -i ./gdrive.txt ubuntu@83.228.211.124
 # Enter password when prompted
 ```
 
