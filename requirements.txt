@@ -23,7 +23,7 @@ neo4j==5.26.0
 # LangChain & LangGraph (Multi-Agent System)
 # ==================================================
 langchain==0.3.14
-langchain-core==0.3.21
+langchain-core==0.3.29
 langchain-mistralai==0.2.4
 langgraph==0.2.53
 pydantic==2.10.3
