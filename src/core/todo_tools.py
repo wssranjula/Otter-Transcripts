@@ -164,16 +164,12 @@ After completing all TODOs:
 These can be answered with a single tool call, no planning needed."""
 
 
-@tool(parse_docstring=True)
+@tool(parse_docstring=False)
 def write_todos(
     todos: list[dict],
     tool_call_id: Annotated[str, InjectedToolCallId]
 ) -> str:
-    """Create or update the agent's TODO list for task planning and tracking.
-    
-    Use this tool when the user's request involves multiple complex steps that need to be tracked.
-    Break down complex tasks into specific, actionable TODO items with clear completion criteria.
-    """
+    """Create or update the agent's TODO list for task planning and tracking."""
     # Format TODO list for display
     result = "✅ Updated TODO list:\n\n"
     for i, todo in enumerate(todos, 1):
