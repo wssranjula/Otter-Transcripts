@@ -32,14 +32,14 @@ echo -e "==================================================${NC}\n"
 # ==================================================
 # Step 1: Update System
 # ==================================================
-echo -e "${BLUE}[1/8] Updating system packages...${NC}"
+echo -e "${BLUE}[1/9] Updating system packages...${NC}"
 sudo apt update && sudo apt upgrade -y
 echo -e "${GREEN}✓ System updated${NC}\n"
 
 # ==================================================
 # Step 2: Install Dependencies
 # ==================================================
-echo -e "${BLUE}[2/8] Installing system dependencies...${NC}"
+echo -e "${BLUE}[2/9] Installing system dependencies...${NC}"
 sudo apt install -y \
     software-properties-common \
     build-essential \
@@ -55,7 +55,7 @@ echo -e "${GREEN}✓ Dependencies installed${NC}\n"
 # ==================================================
 # Step 3: Clone Repository
 # ==================================================
-echo -e "${BLUE}[3/8] Cloning repository...${NC}"
+echo -e "${BLUE}[3/9] Cloning repository...${NC}"
 if [ -d "$INSTALL_DIR" ]; then
     echo -e "${YELLOW}Directory exists. Pulling latest changes...${NC}"
     cd "$INSTALL_DIR"
@@ -69,7 +69,7 @@ echo -e "${GREEN}✓ Repository ready${NC}\n"
 # ==================================================
 # Step 4: Create Virtual Environment
 # ==================================================
-echo -e "${BLUE}[4/8] Setting up Python virtual environment...${NC}"
+echo -e "${BLUE}[4/9] Setting up Python virtual environment...${NC}"
 python3.11 -m venv "$VENV_DIR"
 source "$VENV_DIR/bin/activate"
 pip install --upgrade pip
@@ -100,9 +100,33 @@ if [ ! -f "$INSTALL_DIR/config/config.json" ]; then
 fi
 
 # ==================================================
+# Step 5.5: Setup PostgreSQL Admin Tables
+# ==================================================
+echo -e "${BLUE}[5.5/9] Setting up PostgreSQL admin tables...${NC}"
+
+# Check if PostgreSQL connection string is configured
+if grep -q "POSTGRES_CONNECTION_STRING=" "$INSTALL_DIR/.env" 2>/dev/null && \
+   grep -q "connection_string" "$INSTALL_DIR/config/config.json" 2>/dev/null; then
+    echo -e "${YELLOW}PostgreSQL connection configured. Setting up admin tables...${NC}"
+    
+    # Run admin table setup script
+    source "$VENV_DIR/bin/activate"
+    if python "$INSTALL_DIR/scripts/setup_admin_tables.py"; then
+        echo -e "${GREEN}✓ Admin tables created (admin_users, whatsapp_whitelist)${NC}\n"
+    else
+        echo -e "${YELLOW}⚠ Admin tables setup skipped or failed${NC}"
+        echo -e "${YELLOW}  You can run it manually later: python scripts/setup_admin_tables.py${NC}\n"
+    fi
+else
+    echo -e "${YELLOW}⚠ PostgreSQL not configured yet. Skipping admin tables.${NC}"
+    echo -e "${YELLOW}  Add postgres.connection_string to config.json and run:${NC}"
+    echo -e "${YELLOW}  python scripts/setup_admin_tables.py${NC}\n"
+fi
+
+# ==================================================
 # Step 6: Create Systemd Service
 # ==================================================
-echo -e "${BLUE}[6/8] Creating systemd service...${NC}"
+echo -e "${BLUE}[6/9] Creating systemd service...${NC}"
 
 sudo tee /etc/systemd/system/unified-agent.service > /dev/null <<EOF
 [Unit]
@@ -134,7 +158,7 @@ echo -e "${GREEN}✓ Systemd service created${NC}\n"
 # ==================================================
 # Step 7: Setup Firewall
 # ==================================================
-echo -e "${BLUE}[7/8] Configuring firewall...${NC}"
+echo -e "${BLUE}[7/9] Configuring firewall...${NC}"
 if ! command -v ufw &> /dev/null; then
     sudo apt install -y ufw
 fi
@@ -150,7 +174,18 @@ fi
 echo -e "${GREEN}✓ Firewall configured${NC}\n"
 
 # ==================================================
-# Step 8: Setup Complete
+# Step 8: Create Log Directories
+# ==================================================
+echo -e "${BLUE}[8/9] Creating log directories...${NC}"
+mkdir -p "$HOME/logs"
+touch "$HOME/unified-agent.log"
+touch "$HOME/unified-agent-error.log"
+touch "$INSTALL_DIR/agent_monitoring.log"
+touch "$INSTALL_DIR/unauthorized_whatsapp.log"
+echo -e "${GREEN}✓ Log files created${NC}\n"
+
+# ==================================================
+# Step 9: Setup Complete
 # ==================================================
 echo -e "${GREEN}=================================================="
 echo "  ✓ DEPLOYMENT COMPLETE!"
@@ -160,24 +195,34 @@ echo -e "${YELLOW}NEXT STEPS:${NC}"
 echo "1. Edit your environment variables:"
 echo -e "   ${BLUE}nano $INSTALL_DIR/.env${NC}"
 echo ""
-echo "2. Add your credentials:"
+echo "2. Configure config.json with your credentials:"
+echo -e "   ${BLUE}nano $INSTALL_DIR/config/config.json${NC}"
+echo "   Required:"
 echo "   - Neo4j URI and password"
 echo "   - Mistral API key"
-echo "   - Twilio credentials (if using WhatsApp)"
+echo "   - PostgreSQL connection string (for admin features)"
+echo "   Optional:"
+echo "   - Twilio credentials (for WhatsApp)"
 echo "   - Google Drive credentials file"
 echo ""
-echo "3. Start the service:"
+echo "3. Setup admin tables (if using PostgreSQL):"
+echo -e "   ${BLUE}cd $INSTALL_DIR && source venv/bin/activate${NC}"
+echo -e "   ${BLUE}python scripts/setup_admin_tables.py${NC}"
+echo ""
+echo "4. Start the service:"
 echo -e "   ${BLUE}sudo systemctl enable unified-agent${NC}"
 echo -e "   ${BLUE}sudo systemctl start unified-agent${NC}"
 echo ""
-echo "4. Check service status:"
+echo "5. Check service status:"
 echo -e "   ${BLUE}sudo systemctl status unified-agent${NC}"
 echo ""
-echo "5. View logs:"
+echo "6. View logs:"
 echo -e "   ${BLUE}tail -f $HOME/unified-agent.log${NC}"
+echo -e "   ${BLUE}tail -f $INSTALL_DIR/agent_monitoring.log${NC} (agent behavior)"
 echo ""
-echo "6. Test the API:"
+echo "7. Test the API:"
 echo -e "   ${BLUE}curl http://localhost:8000/health${NC}"
+echo -e "   ${BLUE}curl http://localhost:8000/admin/whitelist/stats${NC} (admin API)"
 echo ""
 
 echo -e "${GREEN}For more information, see:${NC}"

@@ -40,24 +40,52 @@ curl -sSL https://raw.githubusercontent.com/your-repo/main/deploy/infomaniak_set
 
 ```bash
 cd ~/Otter-Transcripts
-nano .env
+nano config/config.json
 ```
 
 Fill in your credentials:
-```bash
-NEO4J_URI=bolt://your-instance.databases.neo4j.io:7687
-NEO4J_PASSWORD=your-password
-MISTRAL_API_KEY=your-api-key
-
-# Optional: WhatsApp
-TWILIO_ACCOUNT_SID=your-sid
-TWILIO_AUTH_TOKEN=your-token
-
-# Optional: Vector search
-POSTGRES_ENABLED=false
+```json
+{
+  "neo4j": {
+    "uri": "bolt://your-instance.databases.neo4j.io:7687",
+    "password": "your-neo4j-password"
+  },
+  "mistral": {
+    "api_key": "your-mistral-api-key"
+  },
+  "postgres": {
+    "enabled": true,
+    "connection_string": "postgresql://user:pass@host:5432/database"
+  },
+  "twilio": {
+    "account_sid": "your-twilio-sid",
+    "auth_token": "your-twilio-token",
+    "whatsapp_number": "+14155238886"
+  },
+  "whatsapp": {
+    "whitelist_enabled": true
+  }
+}
 ```
 
-### Step 5: Start the Service
+**PostgreSQL Setup** (Required for Admin Panel):
+- Use [Neon.tech](https://neon.tech) free tier for PostgreSQL
+- Add connection string to `config.json`
+- Tables will be created automatically on first run
+
+### Step 5: Setup Admin Tables
+
+```bash
+cd ~/Otter-Transcripts
+source venv/bin/activate
+python scripts/setup_admin_tables.py
+```
+
+This creates:
+- `admin_users` table (for future authentication)
+- `whatsapp_whitelist` table (for WhatsApp access control)
+
+### Step 6: Start the Service
 
 ```bash
 # Enable and start
@@ -69,6 +97,9 @@ sudo systemctl status unified-agent
 
 # Test health endpoint
 curl http://localhost:8000/health
+
+# Test admin API
+curl http://localhost:8000/admin/whitelist/stats
 ```
 
 ---
@@ -77,11 +108,17 @@ curl http://localhost:8000/health
 
 ### View Logs
 ```bash
-# Real-time logs
+# Real-time application logs
 tail -f ~/unified-agent.log
 
 # Error logs
 tail -f ~/unified-agent-error.log
+
+# Agent behavior monitoring (queries, tools, performance)
+tail -f ~/Otter-Transcripts/agent_monitoring.log
+
+# Unauthorized WhatsApp access attempts
+tail -f ~/Otter-Transcripts/unauthorized_whatsapp.log
 
 # Last 100 lines
 tail -n 100 ~/unified-agent.log
@@ -97,6 +134,12 @@ curl http://localhost:8000/health
 
 # Google Drive status (if enabled)
 curl http://localhost:8000/gdrive/status
+
+# Admin panel health
+curl http://localhost:8000/admin/chat/health
+
+# Whitelist stats
+curl http://localhost:8000/admin/whitelist/stats
 ```
 
 ### Common Commands

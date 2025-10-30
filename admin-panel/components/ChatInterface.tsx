@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { sendChatMessage, type ChatResponse } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
+
 interface Message {
   role: 'user' | 'assistant';
   content: string;

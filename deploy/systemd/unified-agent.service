@@ -1,5 +1,5 @@
 [Unit]
-Description=Unified RAG Agent (WhatsApp + Google Drive + Sybil)
+Description=Unified RAG Agent (WhatsApp + Google Drive + Sybil + Admin Panel)
 After=network.target network-online.target
 Wants=network-online.target
 
@@ -27,10 +27,12 @@ ProtectSystem=strict
 ProtectHome=read-only
 ReadWritePaths=/home/YOUR_USERNAME/Otter-Transcripts/gdrive_transcripts
 ReadWritePaths=/home/YOUR_USERNAME/Otter-Transcripts/config
+ReadWritePaths=/home/YOUR_USERNAME/Otter-Transcripts/agent_monitoring.log
+ReadWritePaths=/home/YOUR_USERNAME/Otter-Transcripts/unauthorized_whatsapp.log
 ReadWritePaths=/home/YOUR_USERNAME
 
-# Resource limits
-MemoryMax=2G
+# Resource limits (increased for admin panel)
+MemoryMax=3G
 CPUQuota=200%
 
 [Install]
