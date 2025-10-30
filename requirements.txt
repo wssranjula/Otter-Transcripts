@@ -22,16 +22,16 @@ neo4j==5.26.0
 # ==================================================
 # LangChain & LangGraph (Multi-Agent System)
 # ==================================================
-langchain==0.3.7
-langchain-core==0.3.15
-langchain-mistralai==0.2.2
-langgraph==0.2.34
-pydantic==2.9.0
+langchain==0.3.14
+langchain-core==0.3.21
+langchain-mistralai==0.2.4
+langgraph==0.2.53
+pydantic==2.10.3
 
 # ==================================================
 # Mistral AI (LLM & Embeddings)
 # ==================================================
-mistralai==1.5.0
+mistralai==1.2.4
 
 # ==================================================
 # PostgreSQL + Vector Search (Optional)
