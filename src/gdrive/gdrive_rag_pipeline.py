@@ -204,10 +204,32 @@ class GoogleDriveRAGPipeline:
             try:
                 text = file_content.decode('utf-8', errors='ignore')
                 # Look for WhatsApp timestamp pattern
+                # Check first 5000 characters (in case there's a header)
                 import re
                 pattern = r'\d{1,2}/\d{1,2}/\d{4},\s\d{1,2}:\d{2}\s-\s'
-                return bool(re.search(pattern, text[:1000]))
-            except:
+                
+                # Also check for alternative WhatsApp formats
+                alt_pattern1 = r'\[\d{1,2}/\d{1,2}/\d{4},\s\d{1,2}:\d{2}:\d{2}\]'  # [MM/DD/YYYY, HH:MM:SS]
+                alt_pattern2 = r'\d{4}-\d{2}-\d{2},\s\d{1,2}:\d{2}\s-\s'  # YYYY-MM-DD format
+                
+                search_text = text[:5000]  # Check first 5000 chars instead of 1000
+                
+                if re.search(pattern, search_text):
+                    return True
+                if re.search(alt_pattern1, search_text):
+                    return True
+                if re.search(alt_pattern2, search_text):
+                    return True
+                
+                # If filename strongly suggests WhatsApp but no pattern found
+                # Check if it has message-like structure
+                if 'whatsapp' in file_name_lower and (' - ' in text or ': ' in text):
+                    print(f"  [LOG] Filename suggests WhatsApp, treating as chat export")
+                    return True
+                    
+                return False
+            except Exception as e:
+                print(f"  [WARN] Error detecting WhatsApp format: {e}")
                 return False
         return False
 
@@ -320,6 +342,10 @@ class GoogleDriveRAGPipeline:
                 with open(temp_json_file, 'w', encoding='utf-8') as f:
                     json.dump(temp_json, f, indent=2)
 
+                # Track loading success
+                neo4j_success = True
+                postgres_success = True
+                
                 # Load to Neo4j (if enabled)
                 if self.config['processing']['auto_load_to_neo4j']:
                     try:
@@ -329,9 +355,16 @@ class GoogleDriveRAGPipeline:
                         self._load_to_neo4j_with_retry(str(temp_json_file))
                         print("  [OK] Loaded to Neo4j")
                     except Exception as e:
+                        neo4j_success = False
                         logger.error(f"Neo4j loading failed: {e}")
                         print(f"  [ERROR] Neo4j loading failed: {e}")
-                        # Continue with Postgres if available
+                        import traceback
+                        print(f"  [ERROR] Traceback:\n{traceback.format_exc()}")
+                        # If Neo4j is required and it failed, stop processing
+                        if not self.postgres_enabled:
+                            print(f"  [ERROR] Neo4j is the only enabled database and loading failed")
+                            return False
+                        print(f"  [WARN] Neo4j failed, but continuing with Postgres...")
                 
                 # Load to Postgres (if enabled) - independent of Neo4j success
                 if self.postgres_enabled:
@@ -342,9 +375,23 @@ class GoogleDriveRAGPipeline:
                         self.postgres_loader.load_meeting_data(result)
                         print("  [OK] Loaded to Postgres")
                     except Exception as e:
+                        postgres_success = False
                         logger.error(f"Postgres loading failed: {e}")
                         print(f"  [WARN] Postgres loading failed: {e}")
-                        # Continue - Postgres is optional
+                        import traceback
+                        print(f"  [WARN] Traceback:\n{traceback.format_exc()}")
+                        # Postgres is optional, don't fail if Neo4j succeeded
+                        if not neo4j_success:
+                            print(f"  [ERROR] Both Neo4j and Postgres loading failed")
+                            return False
+                
+                # Check if at least one database loaded successfully
+                if self.config['processing']['auto_load_to_neo4j'] and not neo4j_success and not postgres_success:
+                    print(f"  [ERROR] All database loading attempts failed")
+                    return False
+                elif not neo4j_success and not postgres_success and (self.config['processing']['auto_load_to_neo4j'] or self.postgres_enabled):
+                    print(f"  [ERROR] All enabled databases failed to load")
+                    return False
 
             except Exception as e:
                 print(f"  [ERROR] Failed to load to databases: {e}")
@@ -417,21 +464,53 @@ class GoogleDriveRAGPipeline:
         if self.config['processing']['auto_load_to_neo4j'] or self.postgres_enabled:
             print("\n[STEP 2/3] Loading to databases...")
             try:
+                # Track loading success
+                neo4j_success = True
+                postgres_success = True
+                
                 # Load to Neo4j (if enabled)
                 if self.config['processing']['auto_load_to_neo4j']:
-                    print(f"  [LOG] Ensuring unified Neo4j connection...")
-                    self._ensure_unified_neo4j_connection()
-                    print(f"  [LOG] Loading WhatsApp chat to Neo4j...")
-                    self.unified_loader.load_whatsapp_chat(chat_data)
-                    print("  [OK] Loaded to Neo4j")
+                    try:
+                        print(f"  [LOG] Ensuring unified Neo4j connection...")
+                        self._ensure_unified_neo4j_connection()
+                        print(f"  [LOG] Loading WhatsApp chat to Neo4j...")
+                        self.unified_loader.load_whatsapp_chat(chat_data)
+                        print("  [OK] Loaded to Neo4j")
+                    except Exception as e:
+                        neo4j_success = False
+                        logger.error(f"Neo4j loading failed: {e}")
+                        print(f"  [ERROR] Neo4j loading failed: {e}")
+                        import traceback
+                        print(f"  [ERROR] Traceback:\n{traceback.format_exc()}")
+                        # If Neo4j is required and it failed, stop processing
+                        if not self.postgres_enabled:
+                            print(f"  [ERROR] Neo4j is the only enabled database and loading failed")
+                            return False
+                        print(f"  [WARN] Neo4j failed, but continuing with Postgres...")
                 
                 # Load to Postgres (if enabled)
                 if self.postgres_enabled:
-                    print(f"  [LOG] Ensuring Postgres connection...")
-                    self._ensure_postgres_connection()
-                    print(f"  [LOG] Loading WhatsApp chat to Postgres...")
-                    self.postgres_loader.load_whatsapp_data(chat_data)
-                    print("  [OK] Loaded to Postgres")
+                    try:
+                        print(f"  [LOG] Ensuring Postgres connection...")
+                        self._ensure_postgres_connection()
+                        print(f"  [LOG] Loading WhatsApp chat to Postgres...")
+                        self.postgres_loader.load_whatsapp_data(chat_data)
+                        print("  [OK] Loaded to Postgres")
+                    except Exception as e:
+                        postgres_success = False
+                        logger.error(f"Postgres loading failed: {e}")
+                        print(f"  [WARN] Postgres loading failed: {e}")
+                        import traceback
+                        print(f"  [WARN] Traceback:\n{traceback.format_exc()}")
+                        # Postgres is optional, don't fail if Neo4j succeeded
+                        if not neo4j_success:
+                            print(f"  [ERROR] Both Neo4j and Postgres loading failed")
+                            return False
+                
+                # Check if at least one database loaded successfully
+                if not neo4j_success and not postgres_success:
+                    print(f"  [ERROR] All enabled databases failed to load")
+                    return False
 
             except Exception as e:
                 print(f"  [ERROR] Failed to load to databases: {e}")

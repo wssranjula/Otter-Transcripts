@@ -207,11 +207,11 @@ def create_cypher_tools(neo4j_tools: Neo4jCypherTools):
                 ORDER BY c.importance_score DESC LIMIT $limit
             """,
             "WhatsAppChat": """
-                MATCH (w:WhatsAppChat)-[:CONTAINS]->(msg:Message)
-                WHERE msg.text CONTAINS $search_term
-                RETURN w.chat_name as chat, msg.sender as sender, 
-                       msg.text as content, msg.timestamp as time
-                ORDER BY msg.timestamp DESC LIMIT $limit
+                MATCH (w:WhatsAppGroup)<-[:PART_OF]-(c:Chunk)
+                WHERE c.text CONTAINS $search_term
+                RETURN w.group_name as chat, c.speakers as sender, 
+                       c.text as content, c.start_time as time
+                ORDER BY c.start_time DESC LIMIT $limit
             """,
             "Document": """
                 MATCH (d:Document)-[:HAS_PAGE]->(p:Page)
@@ -357,7 +357,7 @@ class CypherReActAgent:
 
 The database contains:
 - **Meetings**: Meeting transcripts with chunks of text
-- **WhatsAppChats**: Chat messages with timestamps and senders
+- **WhatsAppGroup**: WhatsApp chat conversations with chunked messages
 - **Documents**: PDFs, Word docs with pages
 - **Slides**: PowerPoint presentations
 - **PDFs**: PDF documents with sections
@@ -365,11 +365,14 @@ The database contains:
 
 CRITICAL SCHEMA PATTERNS:
 - Chunks link TO meetings: (Chunk)-[:PART_OF]->(Meeting)
+- Chunks link TO WhatsApp: (Chunk)-[:PART_OF]->(WhatsAppGroup)
 - Chunks have meeting_id property for filtering
 - Chunks link to entities: (Chunk)-[:MENTIONS]->(Entity)
 - Chunks can create: (Chunk)-[:RESULTED_IN]->(Action|Decision)
 - Meetings can have: (Meeting)-[:CREATED_ACTION]->(Action)
 - Chunks flow: (Chunk)-[:NEXT_CHUNK]->(Chunk)
+- WhatsApp messages: (Message)-[:IN_CHUNK]->(Chunk)
+- WhatsApp participants: (Participant)-[:PARTICIPATES_IN]->(WhatsAppGroup)
 
 COMMON QUERY PATTERNS:
 ```cypher
@@ -402,6 +405,17 @@ RETURN m.title, c.text, c.speakers
 MATCH (c:Chunk)-[:PART_OF]->(m:Meeting)
 MATCH (c)-[:RESULTED_IN]->(d:Decision)
 RETURN m.title, d.description, d.rationale
+
+// Search WhatsApp conversations
+MATCH (w:WhatsAppGroup)<-[:PART_OF]-(c:Chunk)
+WHERE c.text CONTAINS 'funding'
+RETURN w.group_name, c.text, c.speakers, c.start_time
+ORDER BY c.start_time DESC
+
+// Get all WhatsApp conversations
+MATCH (w:WhatsAppGroup)
+RETURN w.group_name, w.message_count, w.date_range_start
+ORDER BY w.date_range_start DESC
 ```
 
 Your goal is to:

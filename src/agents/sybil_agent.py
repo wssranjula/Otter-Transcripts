@@ -322,14 +322,14 @@ def create_sybil_tools(neo4j_tools: Neo4jCypherTools, config: dict):
                 ORDER BY c.importance_score DESC LIMIT $limit
             """,
             "WhatsAppChat": """
-                MATCH (w:WhatsAppChat)-[:CONTAINS]->(c:Chunk)
+                MATCH (w:WhatsAppGroup)<-[:PART_OF]-(c:Chunk)
                 WHERE c.text CONTAINS $search_term
-                RETURN w.chat_name as meeting_title, w.date as meeting_date,
-                       c.text as content, c.timestamp as time,
-                       w.confidentiality_level as confidentiality_level,
-                       w.document_status as document_status,
-                       w.last_modified_date as last_modified_date
-                ORDER BY c.timestamp DESC LIMIT $limit
+                RETURN w.group_name as meeting_title, w.date_range_start as meeting_date,
+                       c.text as content, c.start_time as time,
+                       'INTERNAL' as confidentiality_level,
+                       'FINAL' as document_status,
+                       w.date_range_end as last_modified_date
+                ORDER BY c.start_time DESC LIMIT $limit
             """,
             "Document": """
                 MATCH (d:Document)-[:HAS_CHUNK]->(c:Chunk)

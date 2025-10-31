@@ -193,6 +193,10 @@ class RAGTranscriptParser:
 
         # Organizations
         for org in entities_data.get('organizations', []):
+            # Skip if no name provided
+            if not org.get('name'):
+                continue
+            
             entity_id = self._generate_id(org['name'])
             entities.append({
                 'id': entity_id,
@@ -206,6 +210,10 @@ class RAGTranscriptParser:
 
         # Countries
         for country in entities_data.get('countries', []):
+            # Skip if no name provided
+            if not country.get('name'):
+                continue
+            
             entity_id = self._generate_id(country['name'])
             entities.append({
                 'id': entity_id,
@@ -219,6 +227,10 @@ class RAGTranscriptParser:
 
         # Topics
         for topic in entities_data.get('topics', []):
+            # Skip if no name provided
+            if not topic.get('name'):
+                continue
+            
             entity_id = self._generate_id(topic['name'])
             entities.append({
                 'id': entity_id,

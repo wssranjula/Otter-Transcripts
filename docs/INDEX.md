@@ -573,6 +573,12 @@ Transcripts → parse_for_rag.py → JSON → load_to_neo4j_rag.py → Neo4j →
 - [`SYSTEM_SUMMARY.md`](SYSTEM_SUMMARY.md) - Overview
 - [`INDEX.md`](INDEX.md) - This file
 
+### Integration Guides
+- [`WHATSAPP_GDRIVE_EXPORT_GUIDE.md`](WHATSAPP_GDRIVE_EXPORT_GUIDE.md) - WhatsApp exports to Google Drive
+- [`GDRIVE_SETUP_GUIDE.md`](GDRIVE_SETUP_GUIDE.md) - Google Drive integration
+- [`WHATSAPP_IMPLEMENTATION.md`](WHATSAPP_IMPLEMENTATION.md) - WhatsApp chat processing
+- [`WHATSAPP_GROUP_CHAT_SETUP.md`](WHATSAPP_GROUP_CHAT_SETUP.md) - WhatsApp bot setup
+
 ### Code Files
 - [`parse_for_rag.py`](parse_for_rag.py) - Main parser
 - [`chunking_logic.py`](chunking_logic.py) - Chunking
