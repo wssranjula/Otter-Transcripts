@@ -175,27 +175,30 @@ export function WhitelistTable() {
       )}
 
       {/* Actions */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Manage Numbers</h2>
-        <div className="flex gap-2">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0">
+        <h2 className="text-xl md:text-2xl font-bold">Manage Numbers</h2>
+        <div className="flex flex-wrap gap-2">
           <Button 
             variant={showInactive ? "default" : "outline"} 
             size="sm" 
             onClick={() => setShowInactive(!showInactive)}
             className={showInactive ? "bg-gradient-to-r from-blue-500 to-cyan-500" : ""}
           >
-            {showInactive ? 'Hide Inactive' : 'Show Inactive'}
+            <span className="hidden sm:inline">{showInactive ? 'Hide' : 'Show'} Inactive</span>
+            <span className="sm:hidden">{showInactive ? 'Hide' : 'Show'}</span>
           </Button>
           <Button variant="outline" size="sm" onClick={loadData}>
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh
+            <RefreshCw className="h-4 w-4 md:mr-2" />
+            <span className="hidden md:inline">Refresh</span>
           </Button>
           <Button 
             onClick={() => setShowAddForm(!showAddForm)}
             className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 shadow-md"
+            size="sm"
           >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Number
+            <Plus className="h-4 w-4 md:mr-2" />
+            <span className="hidden sm:inline">Add Number</span>
+            <span className="sm:hidden">Add</span>
           </Button>
         </div>
       </div>
@@ -322,17 +325,17 @@ export function WhitelistTable() {
                     </div>
                   ) : (
                     // View Mode
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-semibold text-lg">
+                    <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 md:gap-0">
+                      <div className="space-y-1 flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="font-semibold text-base md:text-lg break-all">
                             {entry.phone_number}
                           </h3>
                           <Badge
                             className={
                               entry.is_active 
-                                ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white' 
-                                : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                                ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shrink-0' 
+                                : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 shrink-0'
                             }
                           >
                             {entry.is_active ? '✓ Active' : 'Inactive'}
@@ -344,13 +347,13 @@ export function WhitelistTable() {
                           </p>
                         )}
                         {entry.notes && (
-                          <p className="text-sm mt-2">{entry.notes}</p>
+                          <p className="text-sm mt-2 break-words">{entry.notes}</p>
                         )}
                         <p className="text-xs text-muted-foreground mt-2">
                           Added: {new Date(entry.created_at).toLocaleString()}
                         </p>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 shrink-0 md:ml-4">
                         <Button
                           variant="outline"
                           size="sm"

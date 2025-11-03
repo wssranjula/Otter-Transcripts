@@ -13,19 +13,19 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="p-8 space-y-8">
+    <div className="p-4 md:p-6 lg:p-8 space-y-6 md:space-y-8 pt-16 lg:pt-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-green-700 to-teal-700 bg-clip-text text-transparent mb-2">
+      <div className="flex items-center justify-between gap-3 md:gap-4">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-green-700 to-teal-700 bg-clip-text text-transparent mb-1 md:mb-2 truncate">
             Climate Hub Admin Portal
           </h1>
-          <p className="text-gray-600 dark:text-gray-400 text-lg">
+          <p className="text-gray-600 dark:text-gray-400 text-sm md:text-base lg:text-lg">
             Empowering climate action through AI-powered knowledge management
           </p>
         </div>
-        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-green-600 to-teal-600 flex items-center justify-center shadow-lg">
-          <Globe className="h-9 w-9 text-white animate-pulse" />
+        <div className="w-12 h-12 md:w-14 md:h-14 lg:w-16 lg:h-16 rounded-xl md:rounded-2xl bg-gradient-to-br from-green-600 to-teal-600 flex items-center justify-center shadow-lg shrink-0">
+          <Globe className="h-6 w-6 md:h-8 md:w-8 lg:h-9 lg:w-9 text-white animate-pulse" />
         </div>
       </div>
 

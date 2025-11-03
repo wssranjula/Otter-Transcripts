@@ -51,8 +51,14 @@ except ImportError as e:
 # Pydantic Models for Admin API
 # ========================================
 
+class ChatMessage(BaseModel):
+    role: str  # 'user' or 'assistant'
+    content: str
+    timestamp: str
+
 class ChatRequest(BaseModel):
     message: str
+    history: Optional[list[ChatMessage]] = []  # Previous conversation messages
 
 class ChatResponse(BaseModel):
     response: str
@@ -710,13 +716,29 @@ def create_unified_app(config: dict) -> FastAPI:
                 if not question or not question.strip():
                     raise HTTPException(status_code=400, detail="Message cannot be empty")
                 
-                logger.info(f"Admin chat query: {question[:100]}...")
+                # Format conversation history for context
+                history_context = ""
+                if chat_request.history and len(chat_request.history) > 0:
+                    # Take last 5 messages for context (to avoid overwhelming the agent)
+                    recent_history = chat_request.history[-5:]
+                    history_parts = []
+                    for msg in recent_history:
+                        role = "User" if msg.role == "user" else "Sybil"
+                        history_parts.append(f"{role}: {msg.content}")
+                    history_context = "\n\n".join(history_parts)
+                    
+                    # Prepend history to question for context
+                    question_with_context = f"[Previous conversation context:]\n{history_context}\n\n[Current question:]\n{question}"
+                    logger.info(f"Admin chat query with {len(recent_history)} messages of context: {question[:100]}...")
+                else:
+                    question_with_context = question
+                    logger.info(f"Admin chat query (no history): {question[:100]}...")
                 
                 # Query Sybil using sub-agent architecture
                 # Run in thread pool to avoid blocking
                 answer = await asyncio.to_thread(
                     admin_sybil.query,
-                    question,
+                    question_with_context,
                     verbose=False,
                     source="admin_panel"
                 )

@@ -9,8 +9,15 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 // Types
 // ========================================
 
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+}
+
 export interface ChatRequest {
   message: string;
+  history?: ChatMessage[];
 }
 
 export interface ChatResponse {
@@ -53,13 +60,16 @@ export interface WhitelistStats {
 // Chat API
 // ========================================
 
-export async function sendChatMessage(message: string): Promise<ChatResponse> {
+export async function sendChatMessage(message: string, history?: ChatMessage[]): Promise<ChatResponse> {
   const response = await fetch(`${API_BASE_URL}/admin/chat`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ 
+      message,
+      history: history || []
+    }),
   });
 
   if (!response.ok) {
