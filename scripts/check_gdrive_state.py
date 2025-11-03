@@ -24,7 +24,7 @@ def load_state_file(state_file='config/gdrive_state.json'):
         print(f"❌ State file not found: {state_file}")
         return None
     
-    with open(state_file, 'r') as f:
+    with open(state_file, 'r', encoding='utf-8') as f:
         return json.load(f)
 
 
@@ -34,7 +34,7 @@ def load_config(config_file='config/config.json'):
         print(f"❌ Config file not found: {config_file}")
         return None
     
-    with open(config_file, 'r') as f:
+    with open(config_file, 'r', encoding='utf-8') as f:
         return json.load(f)
 
 

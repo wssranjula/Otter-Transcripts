@@ -222,7 +222,8 @@ CREATE TABLE IF NOT EXISTS messages (
     sequence_in_conversation INTEGER,
     
     -- Timestamps
-    created_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);

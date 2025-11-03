@@ -110,6 +110,9 @@ class UnifiedPostgresLoader:
             conn.commit()
             cursor.close()
             
+            # Run migrations
+            self._run_migrations(conn)
+            
             print("[OK] Postgres schema created successfully")
         except Exception as e:
             conn.rollback()
@@ -117,6 +120,31 @@ class UnifiedPostgresLoader:
             raise
         finally:
             self.release_connection(conn)
+    
+    def _run_migrations(self, conn):
+        """Run database migrations for schema updates"""
+        cursor = conn.cursor()
+        
+        try:
+            # Migration 1: Add updated_at to messages table if it doesn't exist
+            cursor.execute("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name='messages' AND column_name='updated_at'
+            """)
+            if cursor.fetchone() is None:
+                print("[LOG] Adding updated_at column to messages table...")
+                cursor.execute("""
+                    ALTER TABLE messages 
+                    ADD COLUMN updated_at TIMESTAMP DEFAULT NOW()
+                """)
+                conn.commit()
+                print("[OK] Migration complete: added updated_at to messages")
+        except Exception as e:
+            conn.rollback()
+            print(f"[WARN] Migration failed (may be okay if column exists): {e}")
+        finally:
+            cursor.close()
     
     def load_meeting_data(self, data: Dict):
         """

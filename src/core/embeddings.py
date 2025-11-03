@@ -173,7 +173,7 @@ class CachedEmbedder:
         
         if self.cache_file and Path(self.cache_file).exists():
             try:
-                with open(self.cache_file, 'r') as f:
+                with open(self.cache_file, 'r', encoding='utf-8') as f:
                     self.cache = json.load(f)
                 print(f"[OK] Loaded {len(self.cache)} cached embeddings")
             except Exception as e:
@@ -185,8 +185,8 @@ class CachedEmbedder:
         
         if self.cache_file:
             try:
-                with open(self.cache_file, 'w') as f:
-                    json.dump(self.cache, f)
+                with open(self.cache_file, 'w', encoding='utf-8') as f:
+                    json.dump(self.cache, f, ensure_ascii=False)
                 print(f"[OK] Saved {len(self.cache)} embeddings to cache")
             except Exception as e:
                 print(f"[WARN] Could not save cache: {e}")

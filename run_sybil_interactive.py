@@ -1,11 +1,12 @@
 """
 Interactive Sybil Session
 Test Sybil agent with conversational interface
+Now using Sub-Agent Architecture for better performance
 """
 
 import json
 import sys
-from src.agents.sybil_agent import SybilAgent
+from src.agents.sybil_subagents import SybilWithSubAgents
 
 def main():
     """Run interactive Sybil session"""
@@ -18,33 +19,40 @@ def main():
         print(f"❌ Failed to load config: {e}")
         return
     
-    # Initialize Sybil
+    # Initialize Sybil with Sub-Agents
     print("\n" + "="*70)
     print("SYBIL - Climate Hub's Internal AI Assistant")
     print("="*70)
-    print("\nInitializing Sybil...")
+    print("\nInitializing Sybil with sub-agent architecture...")
+    print("  🔍 Query Agent - Database specialist")
+    print("  📊 Analysis Agent - Data analyst")
+    print("  🎯 Main Sybil - Coordinator")
     
     try:
-        sybil = SybilAgent(
+        sybil = SybilWithSubAgents(
             neo4j_uri=config['neo4j']['uri'],
             neo4j_user=config['neo4j']['user'],
             neo4j_password=config['neo4j']['password'],
             mistral_api_key=config['mistral']['api_key'],
             config=config,
-            model=config.get('mistral', {}).get('model', 'mistral-small-latest')
+            model=config.get('mistral', {}).get('model', 'mistral-large-latest')
         )
-        print("✅ Sybil initialized successfully!\n")
+        print("✅ Sybil initialized successfully with sub-agents!\n")
     except Exception as e:
         print(f"❌ Failed to initialize Sybil: {e}")
         return
     
     # Show introduction
     print("="*70)
-    print("Ask Sybil questions about your meetings, documents, and team updates!")
+    print("Ask Sybil questions about your meetings, WhatsApp chats, and documents!")
+    print("\n✨ NEW: Sub-Agent Architecture")
+    print("  - Better context management (no overflow)")
+    print("  - Faster & more reliable for complex queries")
+    print("  - Specialized agents for different tasks")
     print("\nCommands:")
     print("  - Type your question and press Enter")
     print("  - Type 'quit' or 'exit' to end session")
-    print("  - Type 'verbose' to toggle detailed reasoning trace")
+    print("  - Type 'verbose' to toggle detailed sub-agent trace")
     print("  - Type 'help' to see example questions")
     print("="*70)
     
@@ -95,7 +103,7 @@ def main():
 def show_help():
     """Show example questions"""
     print("\n" + "="*70)
-    print("EXAMPLE QUESTIONS FOR SYBIL")
+    print("EXAMPLE QUESTIONS FOR SYBIL (Sub-Agent Mode)")
     print("="*70)
     print("\n1. Identity & Capabilities:")
     print("   - Who are you and what do you do?")
@@ -106,25 +114,32 @@ def show_help():
     print("   - Summarize the Principals call from October")
     print("   - What happened in the HAC Team meeting?")
     print()
-    print("3. Action Items:")
+    print("3. WhatsApp Conversations:")
+    print("   - What were the highlights of the last WhatsApp conversation?")
+    print("   - Show me all WhatsApp groups in the database")
+    print("   - What funding discussions happened on WhatsApp?")
+    print()
+    print("4. Action Items:")
     print("   - What action items were assigned to Sarah?")
     print("   - Show me recent action items from October")
     print("   - What tasks need to be completed?")
     print()
-    print("4. Decisions:")
+    print("5. Decisions:")
     print("   - What decisions were made about Germany?")
     print("   - Show me all decisions from the last month")
     print("   - Why was Germany deprioritized?")
     print()
-    print("5. Information Retrieval:")
+    print("6. Information Retrieval:")
     print("   - What's our current UNEA 7 strategy?")
     print("   - Tell me about our international engagement")
     print("   - What are we doing about climate research funding?")
     print()
-    print("6. People & Roles:")
+    print("7. People & Roles:")
     print("   - What did Tom Pravda say about Germany?")
     print("   - Who is working on UK engagement?")
     print("   - What is Sue Biniaz's background?")
+    print()
+    print("💡 TIP: Enable 'verbose' mode to see sub-agent coordination!")
     print("="*70)
 
 

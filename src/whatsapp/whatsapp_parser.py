@@ -42,6 +42,8 @@ class WhatsAppParser:
         r'^\[(\d{1,2}/\d{1,2}/\d{4}),\s(\d{1,2}:\d{2}:\d{2})\]\s([^:]+):\s(.+)$',
         # Pattern 3: DD/MM/YY, HH:MM - Sender: Message
         r'^(\d{1,2}/\d{1,2}/\d{2}),\s(\d{1,2}:\d{2})\s-\s([^:]+):\s(.+)$',
+        # Pattern 4: [M/D/YY, H:MM:SS AM/PM] Sender: Message (US format with 12-hour time)
+        r'^\[(\d{1,2}/\d{1,2}/\d{2}),\s(\d{1,2}:\d{2}:\d{2}\s[AP]M)\]\s([^:]+):\s(.+)$',
     ]
 
     SYSTEM_MESSAGE_PATTERNS = [
@@ -251,8 +253,10 @@ class WhatsAppParser:
         ]
 
         time_formats = [
-            '%H:%M',     # HH:MM
-            '%H:%M:%S',  # HH:MM:SS
+            '%H:%M',          # HH:MM (24-hour)
+            '%H:%M:%S',       # HH:MM:SS (24-hour)
+            '%I:%M:%S %p',    # H:MM:SS AM/PM (12-hour)
+            '%I:%M %p',       # H:MM AM/PM (12-hour)
         ]
 
         for date_fmt in date_formats:

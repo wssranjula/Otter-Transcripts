@@ -22,7 +22,7 @@ def load_config():
         print("❌ Config file not found: config/config.json")
         return None
     
-    with open(config_path, 'r') as f:
+    with open(config_path, 'r', encoding='utf-8') as f:
         return json.load(f)
 
 

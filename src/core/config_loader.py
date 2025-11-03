@@ -53,7 +53,7 @@ def load_config(config_path: str = "config/config.json") -> Dict[str, Any]:
         logger.error(f"Configuration file not found: {config_path}")
         raise FileNotFoundError(f"Configuration file not found: {config_path}")
     
-    with open(config_file, 'r') as f:
+    with open(config_file, 'r', encoding='utf-8') as f:
         config = json.load(f)
     
     # Recursively resolve environment variables

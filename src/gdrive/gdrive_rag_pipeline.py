@@ -105,7 +105,7 @@ class GoogleDriveRAGPipeline:
             print("Creating default configuration...")
             self._create_default_config(config_file)
 
-        with open(config_file, 'r') as f:
+        with open(config_file, 'r', encoding='utf-8') as f:
             config = json.load(f)
 
         return config
@@ -151,8 +151,8 @@ class GoogleDriveRAGPipeline:
             }
         }
 
-        with open(config_file, 'w') as f:
-            json.dump(default_config, f, indent=2)
+        with open(config_file, 'w', encoding='utf-8') as f:
+            json.dump(default_config, f, indent=2, ensure_ascii=False)
 
         print(f"[OK] Created default config: {config_file}")
         print("Please edit the config file with your settings:")
@@ -183,8 +183,8 @@ class GoogleDriveRAGPipeline:
             if folder_id:
                 # Save folder ID to config
                 self.config['google_drive']['folder_id'] = folder_id
-                with open('config/gdrive_config.json', 'w') as f:
-                    json.dump(self.config, f, indent=2)
+                with open('config/gdrive_config.json', 'w', encoding='utf-8') as f:
+                    json.dump(self.config, f, indent=2, ensure_ascii=False)
                 print("[OK] Folder ID saved to config")
             else:
                 print(f"[ERROR] Folder '{folder_name}' not found")
@@ -319,7 +319,8 @@ class GoogleDriveRAGPipeline:
             return False
 
         # Step 4: Load to databases (Neo4j and/or Postgres)
-        if self.config['processing']['auto_load_to_neo4j'] or self.postgres_enabled:
+        auto_load_neo4j = self.config.get('processing', {}).get('auto_load_to_neo4j', True)
+        if auto_load_neo4j or self.postgres_enabled:
             print("\n[STEP 4/5] Loading to databases...")
             try:
                 # Create temporary JSON for this document
@@ -347,7 +348,7 @@ class GoogleDriveRAGPipeline:
                 postgres_success = True
                 
                 # Load to Neo4j (if enabled)
-                if self.config['processing']['auto_load_to_neo4j']:
+                if auto_load_neo4j:
                     try:
                         print(f"  [LOG] Ensuring Neo4j connection...")
                         self._ensure_neo4j_connection()
@@ -386,10 +387,10 @@ class GoogleDriveRAGPipeline:
                             return False
                 
                 # Check if at least one database loaded successfully
-                if self.config['processing']['auto_load_to_neo4j'] and not neo4j_success and not postgres_success:
+                if auto_load_neo4j and not neo4j_success and not postgres_success:
                     print(f"  [ERROR] All database loading attempts failed")
                     return False
-                elif not neo4j_success and not postgres_success and (self.config['processing']['auto_load_to_neo4j'] or self.postgres_enabled):
+                elif not neo4j_success and not postgres_success and (auto_load_neo4j or self.postgres_enabled):
                     print(f"  [ERROR] All enabled databases failed to load")
                     return False
 
@@ -402,7 +403,8 @@ class GoogleDriveRAGPipeline:
             print("\n[STEP 4/5] Skipping database load (all disabled)")
 
         # Step 5: Cleanup (if enabled)
-        if self.config['processing']['clear_temp_files']:
+        clear_temp_files = self.config.get('processing', {}).get('clear_temp_files', False)
+        if clear_temp_files:
             print("\n[STEP 5/5] Cleaning up temporary files...")
             try:
                 transcript_file.unlink()
@@ -461,7 +463,8 @@ class GoogleDriveRAGPipeline:
             return False
 
         # Step 2: Load to databases (Neo4j and/or Postgres)
-        if self.config['processing']['auto_load_to_neo4j'] or self.postgres_enabled:
+        auto_load_neo4j = self.config.get('processing', {}).get('auto_load_to_neo4j', True)
+        if auto_load_neo4j or self.postgres_enabled:
             print("\n[STEP 2/3] Loading to databases...")
             try:
                 # Track loading success
@@ -469,7 +472,7 @@ class GoogleDriveRAGPipeline:
                 postgres_success = True
                 
                 # Load to Neo4j (if enabled)
-                if self.config['processing']['auto_load_to_neo4j']:
+                if auto_load_neo4j:
                     try:
                         print(f"  [LOG] Ensuring unified Neo4j connection...")
                         self._ensure_unified_neo4j_connection()
@@ -521,7 +524,8 @@ class GoogleDriveRAGPipeline:
             print("\n[STEP 2/3] Skipping database load (all disabled)")
 
         # Step 3: Cleanup (if enabled)
-        if self.config['processing']['clear_temp_files']:
+        clear_temp_files = self.config.get('processing', {}).get('clear_temp_files', False)
+        if clear_temp_files:
             print("\n[STEP 3/3] Cleaning up temporary files...")
             try:
                 temp_file.unlink()

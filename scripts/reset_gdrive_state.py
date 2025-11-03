@@ -25,7 +25,7 @@ def reset_state(state_file='config/gdrive_state.json', backup=True):
         state = {'processed_files': [], 'last_updated': ''}
     else:
         # Load current state
-        with open(state_file, 'r') as f:
+        with open(state_file, 'r', encoding='utf-8') as f:
             state = json.load(f)
         
         processed_count = len(state.get('processed_files', []))
@@ -39,8 +39,8 @@ def reset_state(state_file='config/gdrive_state.json', backup=True):
         # Backup if requested
         if backup and processed_count > 0:
             backup_file = f"{state_file}.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            with open(backup_file, 'w') as f:
-                json.dump(state, f, indent=2)
+            with open(backup_file, 'w', encoding='utf-8') as f:
+                json.dump(state, f, indent=2, ensure_ascii=False)
             print(f"💾 Backup saved to: {backup_file}")
             print()
     
@@ -60,8 +60,8 @@ def reset_state(state_file='config/gdrive_state.json', backup=True):
     state['processed_files'] = []
     state['last_updated'] = datetime.now().isoformat()
     
-    with open(state_file, 'w') as f:
-        json.dump(state, f, indent=2)
+    with open(state_file, 'w', encoding='utf-8') as f:
+        json.dump(state, f, indent=2, ensure_ascii=False)
     
     print("✅ State reset successfully!")
     print()

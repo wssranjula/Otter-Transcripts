@@ -332,7 +332,7 @@ class GoogleDriveMonitor:
         """Load processed files state"""
         if os.path.exists(self.state_file):
             try:
-                with open(self.state_file, 'r') as f:
+                with open(self.state_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                     self.processed_files = set(data.get('processed_files', []))
                 print(f"[OK] Loaded state: {len(self.processed_files)} files already processed")
@@ -345,7 +345,7 @@ class GoogleDriveMonitor:
     def _save_state(self):
         """Save processed files state"""
         try:
-            with open(self.state_file, 'w') as f:
+            with open(self.state_file, 'w', encoding='utf-8') as f:
                 json.dump({
                     'processed_files': list(self.processed_files),
                     'last_updated': datetime.now().isoformat()

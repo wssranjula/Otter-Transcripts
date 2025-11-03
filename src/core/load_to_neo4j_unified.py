@@ -376,8 +376,12 @@ class UnifiedRAGNeo4jLoader:
         with self.driver.session() as session:
             for entity in entities:
                 props = entity.get('properties', {})
-                session.run("""
-                    MERGE (e:Entity {id: $id})
+                # Determine label based on type
+                entity_type = entity['type']
+                label_suffix = f":{entity_type}" if entity_type in ['Person', 'Organization', 'Topic', 'Country'] else ""
+                
+                session.run(f"""
+                    MERGE (e:Entity{label_suffix} {{id: $id}})
                     SET e.name = $name,
                         e.type = $type,
                         e.role = $role,
