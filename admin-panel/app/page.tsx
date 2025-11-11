@@ -1,7 +1,8 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { MessageSquare, Users, Activity, TrendingUp, Leaf, Globe, Wind, Droplet } from 'lucide-react';
+import { MessageSquare, Users, Activity, TrendingUp, Wind, Droplet } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import Image from 'next/image';
 
 export default function DashboardPage() {
   // Mock data - in real app, fetch from API
@@ -24,8 +25,15 @@ export default function DashboardPage() {
             Empowering climate action through AI-powered knowledge management
           </p>
         </div>
-        <div className="w-12 h-12 md:w-14 md:h-14 lg:w-16 lg:h-16 rounded-xl md:rounded-2xl bg-gradient-to-br from-green-600 to-teal-600 flex items-center justify-center shadow-lg shrink-0">
-          <Globe className="h-6 w-6 md:h-8 md:w-8 lg:h-9 lg:w-9 text-white animate-pulse" />
+        <div className="relative w-16 h-16 md:w-20 md:h-20 lg:w-24 lg:h-24 shrink-0 bg-white dark:bg-gray-800 rounded-2xl p-3 shadow-xl border-2 border-green-200 dark:border-green-700 animate-pulse">
+          <Image
+            src="/logo.png"
+            alt="Climate Hub Logo"
+            fill
+            className="object-contain p-2"
+            priority
+            unoptimized
+          />
         </div>
       </div>
 
@@ -141,13 +149,44 @@ export default function DashboardPage() {
             </Link>
           </CardContent>
         </Card>
+
+        <Card className="border-2 border-purple-200 hover:border-purple-400 transition-colors bg-white dark:bg-gray-900">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center shadow-md">
+                <MessageSquare className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <CardTitle>Configure Prompt</CardTitle>
+                <CardDescription>
+                  Set tone, style, and behavior for Sybil supervisor agent
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <Link href="/prompt">
+              <Button className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white shadow-md">
+                <MessageSquare className="h-4 w-4 mr-2" />
+                Configure Prompt
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Climate Action Features */}
       <Card className="border-2 border-green-200 bg-gradient-to-br from-green-50 to-teal-50 dark:from-green-950/20 dark:to-teal-950/20">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Leaf className="h-5 w-5 text-green-600" />
+            <div className="relative w-5 h-5 shrink-0">
+              <Image
+                src="/icon.png"
+                alt="Climate Hub"
+                fill
+                className="object-contain"
+              />
+            </div>
             Sybil: Your Climate Intelligence Assistant
           </CardTitle>
           <CardDescription>
@@ -169,8 +208,13 @@ export default function DashboardPage() {
             </div>
 
             <div className="flex gap-3 p-4 bg-white dark:bg-gray-900 rounded-xl border-2 border-green-100 dark:border-green-900">
-              <div className="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center shrink-0">
-                <Globe className="h-5 w-5 text-green-600 dark:text-green-400" />
+              <div className="relative w-10 h-10 shrink-0">
+                <Image
+                  src="/icon.png"
+                  alt="Climate Hub"
+                  fill
+                  className="object-contain"
+                />
               </div>
               <div>
                 <h3 className="font-semibold mb-1 text-gray-900 dark:text-gray-100">Policy Tracking</h3>

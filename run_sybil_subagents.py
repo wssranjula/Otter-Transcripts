@@ -91,12 +91,44 @@ def main():
                 show_help()
                 continue
             
-            # Get Sybil's response
+            # Get Sybil's response with clarification detection
             print("\nSybil: ", end="", flush=True)
-            response = sybil.query(user_input, verbose=verbose)
+            result = sybil.query(user_input, verbose=verbose, return_dict=True)
+            
+            # Handle QueryResult dict
+            if isinstance(result, dict):
+                needs_clarification = result.get("needs_clarification", False)
+                clarification_question = result.get("clarification_question")
+                conversation_id = result.get("conversation_id")
+                answer = result.get("answer", "")
+            else:
+                # Backward compatibility
+                answer = result
+                needs_clarification = False
+                clarification_question = None
+                conversation_id = None
             
             if not verbose:  # If verbose, response already printed
-                print(response)
+                print(answer)
+            
+            # Handle clarification follow-up
+            if needs_clarification and clarification_question:
+                print(f"\n[Clarification needed]")
+                print(f"Sybil: {clarification_question}")
+                clarification_response = input("\nYour response: ").strip()
+                
+                if clarification_response:
+                    # Continue the conversation with user's clarification
+                    print("\nSybil: ", end="", flush=True)
+                    try:
+                        final_answer = sybil.continue_query(conversation_id, clarification_response, verbose=verbose)
+                        if not verbose:
+                            print(final_answer)
+                    except ValueError as e:
+                        print(f"\n[ERROR] {e}")
+                        print("Please ask your question again.")
+                else:
+                    print("\n[Clarification skipped]")
         
         except KeyboardInterrupt:
             print("\n\nGoodbye!")

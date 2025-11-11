@@ -247,13 +247,33 @@ Links chunks that continue a topic from previous meeting.
 
 ---
 
-#### 7. **REFERENCES**
+#### 7. **RELATES_TO** (Entity → Entity Relationships)
 ```
-(Entity)-[:REFERENCES]->(Entity)
+(Entity)-[:RELATES_TO]->(Entity)
+Properties: relationship_type, context, confidence, source_type, target_type
 ```
-Entity relationships: "Sue Biniaz recommends Ali Mohammed"
 
-**RAG Use:** Provide relationship context when entity is mentioned.
+Entity relationships extracted from transcripts. The `relationship_type` property indicates the specific relationship:
+
+- **Person → Organization**: `WORKS_FOR`, `WORKS_WITH`, `REPRESENTS`, `CONSULTS_FOR`
+- **Person → Person**: `COLLABORATES_WITH`, `MENTIONED_WITH`, `REPORTS_TO`
+- **Organization → Country**: `OPERATES_IN`, `BASED_IN`, `ACTIVE_IN`
+- **Organization → Organization**: `PARTNERS_WITH`, `COLLABORATES_WITH`
+- **Entity → Topic**: `FOCUSES_ON`, `RELATED_TO`
+
+**Example:**
+```cypher
+(Entity:Person {name: 'Tom Pravda'})-[:RELATES_TO {
+  relationship_type: 'WORKS_FOR',
+  context: 'Tom works for TCCRI on SRM research',
+  confidence: 0.9
+}]->(Entity:Organization {name: 'TCCRI'})
+```
+
+**RAG Use:** 
+- Find organizational structures: "Who works for Organization X?"
+- Geographic operations: "Where does Organization X operate?"
+- Entity networks: "How are Person A and Person B connected?"
 
 ---
 
@@ -291,11 +311,23 @@ RETURN c.text as reasoning, c.speakers, d.rationale
 
 ---
 
-### Pattern 4: Multi-hop Reasoning
+### Pattern 4: Entity Relationships
+```cypher
+// Find organizational structure
+MATCH (p:Entity:Person)-[r:RELATES_TO]->(o:Entity:Organization {name: 'TCCRI'})
+WHERE r.relationship_type = 'WORKS_FOR'
+RETURN p.name, p.role, r.context
+
+// Find entity network
+MATCH path = (e1:Entity {name: 'Tom Pravda'})-[*1..2]-(e2:Entity)
+RETURN e2.name, length(path) as depth
+```
+
+### Pattern 5: Multi-hop Reasoning
 ```cypher
 // What led to the Texas strategy decision?
 MATCH (d:Decision {description: 'Fund TCCRI white paper'})
-MATCH path = (c1:Chunk)-[:RELATES_TO*1..2]->(c2:Chunk)-[:RESULTED_IN]->(d)
+MATCH path = (c1:Chunk)-[:NEXT_CHUNK*1..2]->(c2:Chunk)-[:RESULTED_IN]->(d)
 RETURN [chunk IN nodes(path) | chunk.text] as reasoning_chain
 ```
 

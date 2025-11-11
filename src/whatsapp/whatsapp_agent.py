@@ -46,6 +46,10 @@ class WhatsAppAgent:
             max_history=max_history
         )
         
+        # Store pending clarifications per user (for WhatsApp)
+        # Format: {user_phone: {"conversation_id": str, "clarification_question": str}}
+        self.pending_clarifications = {}
+        
         # Initialize Sybil agent with sub-agents (query-agent + analysis-agent)
         neo4j_config = config['neo4j']
         mistral_key = config.get('mistral', {}).get('api_key', '')
@@ -217,27 +221,70 @@ class WhatsAppAgent:
                 await self.send_response(from_number, "🔍 Processing your question...")
                 logger.info("Sent processing indicator")
             
-            # Get conversation history for context
-            history = self.conversation_manager.get_history(user_phone)
-            
-            # Build context from history (last few exchanges)
-            conversation_context = ""
-            if len(history) > 1:  # More than just current message
-                recent_history = history[:-1][-4:]  # Last 4 messages before current
-                conversation_context = "\n".join([
-                    f"{'User' if msg['role'] == 'user' else 'Assistant'}: {msg['content']}"
-                    for msg in recent_history
-                ])
+            # Check if this is a response to a pending clarification
+            if user_phone in self.pending_clarifications:
+                # User is responding to a clarification question
+                pending = self.pending_clarifications[user_phone]
+                conversation_id = pending["conversation_id"]
+                clarification_question = pending["clarification_question"]
+                
+                logger.info(f"Continuing clarification for {user_phone}: {conversation_id}")
+                
+                # Continue the conversation with user's clarification
+                answer = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        self.sybil_agent.continue_query,
+                        conversation_id,
+                        question,  # User's response to clarification
+                        verbose=False
+                    ),
+                    timeout=self.response_timeout
+                )
+                
+                # Clear pending clarification
+                del self.pending_clarifications[user_phone]
+            else:
+                # Normal query - get conversation history for context
+                history = self.conversation_manager.get_history(user_phone)
+                
+                # Build context from history (last few exchanges)
+                conversation_context = ""
+                if len(history) > 1:  # More than just current message
+                    recent_history = history[:-1][-4:]  # Last 4 messages before current
+                    conversation_context = "\n".join([
+                        f"{'User' if msg['role'] == 'user' else 'Assistant'}: {msg['content']}"
+                        for msg in recent_history
+                    ])
 
-            # Generate answer using RAG chatbot with timeout
-            answer = await asyncio.wait_for(
-                asyncio.to_thread(
-                    self._generate_answer,
-                    question,
-                    conversation_context
-                ),
-                timeout=self.response_timeout
-            )
+                # Generate answer using Sybil with clarification detection
+                result = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        self.sybil_agent.query,
+                        question if not conversation_context else f"{conversation_context}\n\nCurrent question: {question}",
+                        verbose=False,
+                        source="whatsapp",
+                        return_dict=True
+                    ),
+                    timeout=self.response_timeout
+                )
+                
+                # Handle QueryResult dict
+                if isinstance(result, dict):
+                    needs_clarification = result.get("needs_clarification", False)
+                    clarification_question = result.get("clarification_question")
+                    conversation_id = result.get("conversation_id")
+                    answer = result.get("answer", "")
+                    
+                    # If clarification needed, store it for next message
+                    if needs_clarification and clarification_question:
+                        self.pending_clarifications[user_phone] = {
+                            "conversation_id": conversation_id,
+                            "clarification_question": clarification_question
+                        }
+                        logger.info(f"Stored clarification request for {user_phone}: {clarification_question[:100]}...")
+                else:
+                    # Backward compatibility
+                    answer = result
 
             # Add assistant response to conversation history
             self.conversation_manager.add_message(user_phone, 'assistant', answer)
@@ -261,37 +308,6 @@ class WhatsAppAgent:
             logger.error(f"Error generating answer: {e}", exc_info=True)
             return f"❌ Sorry, I encountered an error processing your question. Please try again."
 
-    def _generate_answer(self, question: str, conversation_context: str) -> str:
-        """
-        Generate answer using Sybil agent (runs in thread pool)
-
-        Args:
-            question: User's question
-            conversation_context: Previous conversation context
-
-        Returns:
-            str: Generated answer with citations and warnings
-        """
-        # Add concise prompt if configured
-        concise_prompt = ""
-        if self.prefer_concise:
-            concise_prompt = f"\n\nIMPORTANT: Keep response concise for WhatsApp (under {self.max_message_length} characters if possible). Use Smart Brevity: short paragraphs, bullet points, key highlights only."
-        
-        # Build context-aware question if there's conversation history
-        if conversation_context:
-            enhanced_question = f"""Previous conversation context:
-{conversation_context}
-
-Current question: {question}
-
-Please answer considering the conversation context above.{concise_prompt}"""
-        else:
-            enhanced_question = f"""{question}{concise_prompt}"""
-        
-        # Use Sybil agent to answer (includes all smart features)
-        answer = self.sybil_agent.query(enhanced_question, verbose=False, source="whatsapp")
-        
-        return answer
 
     def split_message(self, message: str, max_length: int = 1500) -> list:
         """

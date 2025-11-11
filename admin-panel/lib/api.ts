@@ -194,3 +194,47 @@ export async function getWhitelistStats(): Promise<WhitelistStats> {
   return response.json();
 }
 
+// ========================================
+// Prompt Configuration API
+// ========================================
+
+export interface PromptConfig {
+  tone: string;
+  use_smart_brevity: boolean;
+  people_references: string;
+  use_formatting: boolean;
+  use_emojis: boolean;
+  default_response_length: string;
+  ask_about_depth: boolean;
+  tone_adapts_by_user: boolean;
+  custom_instructions: string;
+}
+
+export async function getPromptConfig(): Promise<PromptConfig> {
+  const response = await fetch(`${API_BASE_URL}/admin/sybil/prompt-config`);
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+    throw new Error(error.detail || `HTTP ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function updatePromptConfig(config: PromptConfig): Promise<PromptConfig> {
+  const response = await fetch(`${API_BASE_URL}/admin/sybil/prompt-config`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(config),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+    throw new Error(error.detail || `HTTP ${response.status}`);
+  }
+
+  return response.json();
+}
+

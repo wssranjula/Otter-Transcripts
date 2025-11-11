@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Send, Loader2, Leaf, User, AlertCircle, RotateCcw } from 'lucide-react';
+import { Send, Loader2, User, AlertCircle, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
@@ -9,6 +9,7 @@ import { sendChatMessage, type ChatResponse } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import Image from 'next/image';
 
 
 interface Message {
@@ -178,7 +179,15 @@ export function ChatInterface() {
                   {message.role === 'user' ? (
                     <User className="h-4 w-4 md:h-5 md:w-5 text-white" />
                   ) : (
-                    <Leaf className="h-4 w-4 md:h-5 md:w-5 text-white" />
+                    <div className="relative w-5 h-5 md:w-6 md:h-6">
+                      <Image
+                        src="/icon.png"
+                        alt="Sybil"
+                        fill
+                        className="object-contain brightness-0 invert"
+                        unoptimized
+                      />
+                    </div>
                   )}
                 </div>
 
@@ -240,7 +249,15 @@ export function ChatInterface() {
             {isLoading && (
               <div className="flex gap-2 md:gap-3 items-start animate-in slide-in-from-bottom-4">
                 <div className="w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center shrink-0 bg-gradient-to-br from-green-600 to-teal-600 shadow-md">
-                  <Leaf className="h-4 w-4 md:h-5 md:w-5 text-white" />
+                  <div className="relative w-5 h-5 md:w-6 md:h-6">
+                    <Image
+                      src="/icon.png"
+                      alt="Sybil"
+                      fill
+                      className="object-contain brightness-0 invert"
+                      unoptimized
+                    />
+                  </div>
                 </div>
                 <div className="bg-white dark:bg-gray-800 border-2 border-green-100 dark:border-green-900 rounded-2xl rounded-tl-sm px-3 py-2 md:px-4 md:py-3 shadow-sm">
                   <div className="flex items-center gap-2">
@@ -282,7 +299,14 @@ export function ChatInterface() {
                 className="min-h-[56px] md:min-h-[64px] max-h-[150px] md:max-h-[200px] resize-none pr-10 md:pr-12 text-sm md:text-base rounded-xl border-2 border-green-200 focus:border-green-400 dark:border-green-800 dark:focus:border-green-600 transition-colors"
                 disabled={isLoading}
               />
-              <Leaf className="absolute right-2 md:right-3 top-2 md:top-3 h-4 w-4 md:h-5 md:w-5 text-green-500 opacity-50" />
+              <div className="absolute right-2 md:right-3 top-2 md:top-3 w-4 h-4 md:w-5 md:h-5 opacity-50">
+                <Image
+                  src="/icon.png"
+                  alt="Climate Hub"
+                  fill
+                  className="object-contain"
+                />
+              </div>
             </div>
             <Button
               type="submit"

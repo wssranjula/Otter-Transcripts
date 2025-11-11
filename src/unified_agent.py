@@ -59,10 +59,14 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     history: Optional[list[ChatMessage]] = []  # Previous conversation messages
+    conversation_id: Optional[str] = None  # For continuing clarified conversations
 
 class ChatResponse(BaseModel):
     response: str
     timestamp: str
+    needs_clarification: Optional[bool] = False
+    clarification_question: Optional[str] = None
+    conversation_id: Optional[str] = None
 
 class WhitelistEntry(BaseModel):
     phone_number: str
@@ -212,15 +216,23 @@ def create_unified_app(config: dict) -> FastAPI:
                 mistral_key = config.get('mistral', {}).get('api_key', '')
                 mistral_model = config.get('mistral', {}).get('model', 'mistral-large-latest')
                 
-                admin_sybil = SybilWithSubAgents(
-                    neo4j_uri=neo4j_config['uri'],
-                    neo4j_user=neo4j_config['user'],
-                    neo4j_password=neo4j_config['password'],
-                    mistral_api_key=mistral_key,
-                    config=config,
-                    model=mistral_model
-                )
-                logger.info("[OK] Admin Sybil agent initialized")
+                if not mistral_key:
+                    raise ValueError("Mistral API key not configured")
+                
+                logger.info("Initializing Sybil agent for admin chat...")
+                try:
+                    admin_sybil = SybilWithSubAgents(
+                        neo4j_uri=neo4j_config['uri'],
+                        neo4j_user=neo4j_config['user'],
+                        neo4j_password=neo4j_config['password'],
+                        mistral_api_key=mistral_key,
+                        config=config,
+                        model=mistral_model
+                    )
+                    logger.info("[OK] Admin Sybil agent initialized")
+                except Exception as sybil_error:
+                    logger.error(f"Failed to initialize Sybil agent: {sybil_error}", exc_info=True)
+                    raise  # Re-raise to be caught by outer try/except
                 
         except Exception as e:
             logger.error(f"Failed to initialize Admin services: {e}", exc_info=True)
@@ -247,8 +259,16 @@ def create_unified_app(config: dict) -> FastAPI:
             else:
                 logger.info("[READY] Google Drive monitoring ready (not auto-started)")
         
+        if admin_enabled and admin_db and admin_sybil:
+            logger.info("[OK] Admin service ready")
+        elif admin_enabled:
+            logger.warning("[WARNING] Admin service enabled but not fully initialized")
+            logger.warning(f"  - admin_db: {admin_db is not None}")
+            logger.warning(f"  - admin_sybil: {admin_sybil is not None}")
+            logger.warning("  - Admin endpoints will NOT be available")
+        
         logger.info("="*70)
-
+ 
     # Shutdown event
     @app.on_event("shutdown")
     async def shutdown():
@@ -688,6 +708,18 @@ def create_unified_app(config: dict) -> FastAPI:
                 raise HTTPException(status_code=500, detail=str(e))
 
     # ===== ADMIN PANEL ENDPOINTS =====
+    
+    # Diagnostic endpoint to check admin service status
+    @app.get("/admin/status", tags=["Admin"])
+    async def admin_status():
+        """Check admin service status and availability"""
+        return {
+            "admin_enabled": admin_enabled,
+            "admin_available": ADMIN_AVAILABLE,
+            "admin_db_initialized": admin_db is not None,
+            "admin_sybil_initialized": admin_sybil is not None,
+            "endpoints_available": admin_enabled and admin_db is not None and admin_sybil is not None
+        }
 
     if admin_enabled and admin_db and admin_sybil:
         
@@ -734,22 +766,61 @@ def create_unified_app(config: dict) -> FastAPI:
                     question_with_context = question
                     logger.info(f"Admin chat query (no history): {question[:100]}...")
                 
-                # Query Sybil using sub-agent architecture
+                # Check if this is a continuation of a clarification
+                if chat_request.conversation_id:
+                    # Continue existing conversation
+                    answer = await asyncio.to_thread(
+                        admin_sybil.continue_query,
+                        chat_request.conversation_id,
+                        question,  # User's response to clarification
+                        verbose=False
+                    )
+                    
+                    # Strip emojis for logging to avoid encoding issues
+                    log_answer = answer.encode('ascii', errors='ignore').decode('ascii')
+                    logger.info(f"Admin chat continuation response: {log_answer[:100]}...")
+                    
+                    return ChatResponse(
+                        response=answer,
+                        timestamp=datetime.utcnow().isoformat() + "Z",
+                        needs_clarification=False,
+                        clarification_question=None,
+                        conversation_id=None
+                    )
+                
+                # Query Sybil using sub-agent architecture with clarification detection
                 # Run in thread pool to avoid blocking
-                answer = await asyncio.to_thread(
+                result = await asyncio.to_thread(
                     admin_sybil.query,
                     question_with_context,
                     verbose=False,
-                    source="admin_panel"
+                    source="admin_panel",
+                    return_dict=True  # Get structured response for clarification handling
                 )
+                
+                # Handle QueryResult dict
+                if isinstance(result, dict):
+                    needs_clarification = result.get("needs_clarification", False)
+                    clarification_question = result.get("clarification_question")
+                    conversation_id = result.get("conversation_id")
+                    answer = result.get("answer", "")
+                else:
+                    # Backward compatibility: if string returned, no clarification needed
+                    answer = result
+                    needs_clarification = False
+                    clarification_question = None
+                    conversation_id = None
                 
                 # Strip emojis for logging to avoid encoding issues
                 log_answer = answer.encode('ascii', errors='ignore').decode('ascii')
-                logger.info(f"Admin chat response: {log_answer[:100]}...")
+                logger.info(f"Admin chat response: {log_answer[:100]}... (clarification: {needs_clarification})")
                 
                 return ChatResponse(
                     response=answer,
-                    timestamp=datetime.utcnow().isoformat() + "Z"
+                    timestamp=datetime.utcnow().isoformat() + "Z",
+                    needs_clarification=needs_clarification,
+                    clarification_question=clarification_question,
+                    conversation_id=conversation_id
                 )
                 
             except Exception as e:
@@ -1007,6 +1078,173 @@ def create_unified_app(config: dict) -> FastAPI:
                 
             except Exception as e:
                 logger.error(f"Error getting whitelist stats: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        # ===== PROMPT CONFIGURATION ENDPOINTS =====
+        
+        @app.get("/admin/sybil/prompt-config", tags=["Admin"])
+        async def get_prompt_config():
+            """
+            # Get Supervisor Prompt Configuration
+            
+            Retrieve the current supervisor prompt configuration from separate config file.
+            
+            **Returns:**
+            - Current prompt configuration object
+            """
+            try:
+                import json
+                from pathlib import Path
+                
+                # Try to load from separate prompt config file
+                prompt_config_path = Path("config/supervisor_prompt_config.json")
+                
+                if prompt_config_path.exists():
+                    with open(prompt_config_path, 'r', encoding='utf-8') as f:
+                        prompt_config = json.load(f)
+                        return prompt_config
+                
+                # Fallback: Try config.json
+                sybil_config = config.get('sybil', {})
+                prompt_config = sybil_config.get('supervisor_prompt_config', {})
+                
+                if prompt_config:
+                    return prompt_config
+                
+                # Return default structure if not configured
+                return {
+                    "tone": "Calm, confident, professional, and concise",
+                    "use_smart_brevity": True,
+                    "people_references": "first_names_internally_roles_cross_team",
+                    "use_formatting": True,
+                    "use_emojis": False,
+                    "default_response_length": "3-6 sentences or short bullet lists",
+                    "ask_about_depth": True,
+                    "tone_adapts_by_user": False,
+                    "custom_instructions": ""
+                }
+                
+            except Exception as e:
+                logger.error(f"Error getting prompt config: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @app.put("/admin/sybil/prompt-config", tags=["Admin"])
+        async def update_prompt_config(prompt_config: dict):
+            """
+            # Update Supervisor Prompt Configuration
+            
+            Update the supervisor prompt configuration.
+            
+            **Request body:**
+            - tone: Tone description (string)
+            - use_smart_brevity: Enable Smart Brevity (boolean)
+            - people_references: How to refer to people (string)
+            - use_formatting: Enable formatting (boolean)
+            - use_emojis: Enable emojis (boolean)
+            - default_response_length: Default response length (string)
+            - ask_about_depth: Ask about depth for longer content (boolean)
+            - tone_adapts_by_user: Adapt tone by user (boolean)
+            - custom_instructions: Additional custom instructions (string)
+            
+            **Returns:**
+            - Updated prompt configuration
+            """
+            try:
+                import json
+                from pathlib import Path
+                
+                # Validate required fields
+                required_fields = [
+                    'tone', 'use_smart_brevity', 'people_references', 
+                    'use_formatting', 'use_emojis', 'default_response_length',
+                    'ask_about_depth', 'tone_adapts_by_user'
+                ]
+                
+                for field in required_fields:
+                    if field not in prompt_config:
+                        raise HTTPException(
+                            status_code=400, 
+                            detail=f"Missing required field: {field}"
+                        )
+                
+                # Validate types
+                if not isinstance(prompt_config['use_smart_brevity'], bool):
+                    raise HTTPException(
+                        status_code=400, 
+                        detail="use_smart_brevity must be boolean"
+                    )
+                if not isinstance(prompt_config['use_formatting'], bool):
+                    raise HTTPException(
+                        status_code=400, 
+                        detail="use_formatting must be boolean"
+                    )
+                if not isinstance(prompt_config['use_emojis'], bool):
+                    raise HTTPException(
+                        status_code=400, 
+                        detail="use_emojis must be boolean"
+                    )
+                if not isinstance(prompt_config['ask_about_depth'], bool):
+                    raise HTTPException(
+                        status_code=400, 
+                        detail="ask_about_depth must be boolean"
+                    )
+                if not isinstance(prompt_config['tone_adapts_by_user'], bool):
+                    raise HTTPException(
+                        status_code=400, 
+                        detail="tone_adapts_by_user must be boolean"
+                    )
+                
+                # Ensure custom_instructions exists
+                if 'custom_instructions' not in prompt_config:
+                    prompt_config['custom_instructions'] = ''
+                
+                # Save to separate prompt config file
+                prompt_config_path = Path("config/supervisor_prompt_config.json")
+                
+                # Create config directory if it doesn't exist
+                prompt_config_path.parent.mkdir(parents=True, exist_ok=True)
+                
+                # Save prompt config to separate file
+                with open(prompt_config_path, 'w', encoding='utf-8') as f:
+                    json.dump(prompt_config, f, indent=2, ensure_ascii=False)
+                
+                logger.info(f"Updated supervisor prompt configuration in {prompt_config_path}")
+                
+                # Also update in-memory config for backward compatibility
+                if 'sybil' not in config:
+                    config['sybil'] = {}
+                config['sybil']['supervisor_prompt_config'] = prompt_config
+                
+                # Hot-reload: Reload prompt in running agent instances
+                if admin_sybil:
+                    try:
+                        # Reload from the separate file (will be picked up by _load_prompt_config)
+                        admin_sybil.reload_prompt(updated_config=config)
+                        logger.info("Admin Sybil agent prompt reloaded successfully")
+                    except Exception as e:
+                        logger.warning(f"Failed to reload admin_sybil prompt: {e}")
+                        # Continue anyway - config is saved, will take effect on restart
+                
+                # Note: WhatsApp agent would need similar reload if it exists
+                # For now, WhatsApp agent will pick up changes on next restart
+                
+                return prompt_config
+                
+            except HTTPException:
+                raise
+            except FileNotFoundError:
+                raise HTTPException(
+                    status_code=404, 
+                    detail="Config file not found"
+                )
+            except json.JSONDecodeError as e:
+                logger.error(f"Invalid JSON in config file: {e}")
+                raise HTTPException(
+                    status_code=500, 
+                    detail="Invalid config file format"
+                )
+            except Exception as e:
+                logger.error(f"Error updating prompt config: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
 
     return app

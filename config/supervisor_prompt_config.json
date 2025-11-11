@@ -1,0 +1,11 @@
+{
+  "tone": "Calm, confident, professional, and concise",
+  "use_smart_brevity": true,
+  "people_references": "first_names_internally_roles_cross_team",
+  "use_formatting": true,
+  "use_emojis": false,
+  "default_response_length": "3-6 sentences or short bullet lists",
+  "ask_about_depth": true,
+  "tone_adapts_by_user": false,
+  "custom_instructions": ""
+}
