@@ -21,7 +21,7 @@
 ssh -i ./gdrive.txt ubuntu@83.228.211.124
 # Enter password when prompted
 ```
-
+ 
 ### Step 3: Run Automated Setup
 
 ```bash
