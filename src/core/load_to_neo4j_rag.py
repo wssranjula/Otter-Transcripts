@@ -111,6 +111,7 @@ class RAGNeo4jLoader:
         self._load_chunks(transcripts)
         self._create_chunk_flow(transcripts)
         self._link_chunks_to_entities(transcripts)
+        self._load_entity_relationships(transcripts)
         self._load_decisions(transcripts)
         self._load_actions(transcripts)
         self._link_outcomes_to_chunks(transcripts)
@@ -298,9 +299,83 @@ class RAGNeo4jLoader:
 
         print(f"  [OK] {total_mentions} MENTIONS links")
 
+    def _load_entity_relationships(self, transcripts):
+        """Create Entity → Entity relationships"""
+        print("\n6. Loading entity relationships...")
+
+        # Collect all relationships
+        all_relationships = []
+        for t in transcripts:
+            for rel in t.get('entity_relationships', []):
+                all_relationships.append(rel)
+
+        if not all_relationships:
+            print("  [OK] No relationships found")
+            return
+
+        print(f"  Processing {len(all_relationships)} entity relationships...")
+
+        # Process in batches
+        batch_size = 500
+        total_rels = 0
+
+        for i in range(0, len(all_relationships), batch_size):
+            batch = all_relationships[i:i + batch_size]
+
+            with self.driver.session() as session:
+                # Use UNWIND for batch processing
+                session.run("""
+                    UNWIND $relationships as rel
+                    MATCH (e1:Entity {id: rel.source_entity_id})
+                    MATCH (e2:Entity {id: rel.target_entity_id})
+                    MERGE (e1)-[r:RELATES_TO]->(e2)
+                    SET r.relationship_type = rel.relationship_type,
+                        r.context = rel.context,
+                        r.confidence = rel.confidence,
+                        r.source_type = rel.source_entity_type,
+                        r.target_type = rel.target_entity_type
+                """, relationships=batch)
+
+                total_rels += len(batch)
+
+                # Progress indicator
+                if (i + batch_size) % 1000 == 0 or (i + batch_size) >= len(all_relationships):
+                    print(f"    Progress: {min(i + batch_size, len(all_relationships))}/{len(all_relationships)} relationships created")
+
+        # Now create specific relationship types based on relationship_type
+        # This allows for better querying with specific types
+        print("  Creating typed relationships...")
+        with self.driver.session() as session:
+            # Create specific relationship types for common patterns
+            # Use apoc.create.relationship for dynamic relationship creation
+            relationship_types = [
+                'WORKS_FOR', 'WORKS_WITH', 'REPRESENTS', 'CONSULTS_FOR',
+                'COLLABORATES_WITH', 'MENTIONED_WITH', 'REPORTS_TO',
+                'OPERATES_IN', 'BASED_IN', 'ACTIVE_IN',
+                'PARTNERS_WITH', 'FOCUSES_ON', 'RELATED_TO'
+            ]
+            
+            for rel_type in relationship_types:
+                # Use string concatenation carefully - Neo4j doesn't support dynamic relationship types in MATCH
+                # So we'll query with WHERE and create relationships with apoc if available, or use a workaround
+                try:
+                    # Try using apoc if available
+                    session.run("""
+                        MATCH (e1:Entity)-[r:RELATES_TO]->(e2:Entity)
+                        WHERE r.relationship_type = $rel_type
+                        CALL apoc.create.relationship(e1, $rel_type, {context: r.context, confidence: r.confidence, source_type: r.source_type, target_type: r.target_type}, e2) YIELD rel
+                        RETURN count(rel) as created
+                    """, rel_type=rel_type)
+                except:
+                    # Fallback: Keep using RELATES_TO with relationship_type property
+                    # This still works for queries using WHERE r.relationship_type = 'WORKS_FOR'
+                    pass
+
+        print(f"  [OK] {total_rels} entity relationships loaded")
+
     def _load_decisions(self, transcripts):
         """Load decision nodes"""
-        print("\n6. Loading decisions...")
+        print("\n7. Loading decisions...")
 
         total_decisions = 0
         with self.driver.session() as session:
@@ -327,7 +402,7 @@ class RAGNeo4jLoader:
 
     def _load_actions(self, transcripts):
         """Load action nodes"""
-        print("\n7. Loading actions...")
+        print("\n8. Loading actions...")
 
         total_actions = 0
         with self.driver.session() as session:
@@ -354,7 +429,7 @@ class RAGNeo4jLoader:
 
     def _link_outcomes_to_chunks(self, transcripts):
         """Create RESULTED_IN relationships from chunks to decisions/actions with batch processing"""
-        print("\n8. Linking outcomes to source chunks...")
+        print("\n9. Linking outcomes to source chunks...")
 
         # Collect all decision links
         decision_links = []
@@ -481,6 +556,17 @@ class RAGNeo4jLoader:
             print("\n  Top 10 mentioned entities:")
             for record in result:
                 print(f"    {record['entity']:30} ({record['type']:12}) {record['mentions']:>4} mentions")
+        
+        # Relationship statistics
+        print("\n**Entity Relationships:**")
+        result = session.run("""
+            MATCH ()-[r:RELATES_TO]->()
+            RETURN r.relationship_type as rel_type, count(*) as count
+            ORDER BY count DESC
+        """)
+        
+        for record in result:
+            print(f"    {record['rel_type']:20} {record['count']:>4} relationships")
 
 
 def main():

@@ -41,6 +41,9 @@ class Neo4jCypherTools:
     """Tools for interacting with Neo4j via Cypher"""
     
     def __init__(self, uri: str, user: str, password: str):
+        self.uri = uri
+        self.user = user
+        self.password = password
         # For Neo4j Aura (cloud), we need SSL context with certifi certificates
         ssl_context = ssl.create_default_context(cafile=certifi.where())
         self.driver = GraphDatabase.driver(
@@ -50,8 +53,43 @@ class Neo4jCypherTools:
         )
         self._schema_cache = None
         
+    def _ensure_connection(self):
+        """Ensure Neo4j connection is alive, reconnect if needed"""
+        try:
+            # Test connection
+            self.driver.verify_connectivity()
+            return True
+        except Exception as e:
+            logger.warning(f"Neo4j connection check failed: {e}. Attempting reconnect...")
+            try:
+                # Close old driver
+                try:
+                    self.driver.close()
+                except Exception:
+                    pass
+                
+                # Create new driver
+                ssl_context = ssl.create_default_context(cafile=certifi.where())
+                self.driver = GraphDatabase.driver(
+                    self.uri,
+                    auth=(self.user, self.password),
+                    ssl_context=ssl_context
+                )
+                # Verify new connection
+                self.driver.verify_connectivity()
+                logger.info("Neo4j connection reestablished successfully")
+                # Clear schema cache since connection was reset
+                self._schema_cache = None
+                return True
+            except Exception as reconnect_error:
+                logger.error(f"Failed to reconnect to Neo4j: {reconnect_error}")
+                return False
+        
     def close(self):
-        self.driver.close()
+        try:
+            self.driver.close()
+        except Exception:
+            pass
     
     def get_schema(self) -> str:
         """Get current Neo4j schema (node labels, relationships, properties)"""
@@ -107,13 +145,34 @@ class Neo4jCypherTools:
     
     def execute_cypher(self, cypher_query: str, parameters: Dict = None) -> List[Dict]:
         """Execute a Cypher query and return results"""
+        # Ensure connection is alive before executing
+        if not self._ensure_connection():
+            raise Exception("Neo4j connection unavailable")
+        
         try:
             with self.driver.session() as session:
                 result = session.run(cypher_query, parameters or {})
                 return [dict(record) for record in result]
         except Exception as e:
-            logger.error(f"Cypher execution error: {e}")
-            raise
+            # If execution fails, try reconnecting once more
+            error_msg = str(e).lower()
+            if "defunct" in error_msg or "connection" in error_msg or "reset" in error_msg:
+                logger.warning(f"Connection error during query execution: {e}. Attempting reconnect...")
+                if self._ensure_connection():
+                    # Retry once after reconnection
+                    try:
+                        with self.driver.session() as session:
+                            result = session.run(cypher_query, parameters or {})
+                            return [dict(record) for record in result]
+                    except Exception as retry_error:
+                        logger.error(f"Cypher execution error after reconnect: {retry_error}")
+                        raise
+                else:
+                    logger.error(f"Cypher execution error: {e}")
+                    raise
+            else:
+                logger.error(f"Cypher execution error: {e}")
+                raise
     
     def validate_cypher(self, cypher_query: str) -> tuple[bool, str]:
         """Validate Cypher query syntax without executing"""

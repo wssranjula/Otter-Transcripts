@@ -8,6 +8,10 @@ const inter = Inter({ subsets: ['latin'] })
 export const metadata: Metadata = {
   title: 'Sybil Admin Panel - Climate Hub',
   description: 'AI-powered knowledge management for climate action',
+  icons: {
+    icon: '/icon.png',
+    apple: '/logo.png',
+  },
 }
 
 export default function RootLayout({

@@ -104,12 +104,19 @@ class RAGTranscriptParser:
         actions = self._process_actions(entities_data, chunks)
         print(f"    [OK] {len(decisions)} decisions, {len(actions)} actions")
 
+        print(f"  Step 5: Extracting entity relationships...")
+        # Extract relationships between entities
+        relationships = self.extractor.extract_relationships(content, meeting_info, entities_data)
+        # Process relationships to match entity IDs
+        processed_relationships = self._process_relationships(relationships, entities)
+        print(f"    [OK] Found {len(processed_relationships)} relationships")
+
         # Convert chunks to dicts
         chunk_dicts = [self._chunk_to_dict(c, meeting_info, i) for i, c in enumerate(chunks)]
 
         # Generate embeddings if enabled
         if self.embedder:
-            print(f"  Step 5: Generating embeddings...")
+            print(f"  Step 6: Generating embeddings...")
             self.embedder.embed_chunks(chunk_dicts)
             print(f"    [OK] Embeddings generated")
 
@@ -119,7 +126,8 @@ class RAGTranscriptParser:
             'entities': entities,
             'chunk_entity_links': chunk_entity_links,
             'decisions': decisions,
-            'actions': actions
+            'actions': actions,
+            'entity_relationships': processed_relationships
         }
 
     def _extract_meeting_info(self, file_path: Path, content: str) -> Dict:
@@ -349,6 +357,37 @@ class RAGTranscriptParser:
     def _generate_id(self, text: str) -> str:
         """Generate ID"""
         return hashlib.md5(text.encode()).hexdigest()[:12]
+    
+    def _process_relationships(self, relationships: List[Dict], entities: List[Dict]) -> List[Dict]:
+        """Process relationships and link to entity IDs"""
+        processed = []
+        
+        # Create entity name to ID mapping
+        entity_map = {entity['name'].lower(): entity['id'] for entity in entities}
+        
+        for rel in relationships:
+            source_name = rel.get('source_entity', '').strip()
+            target_name = rel.get('target_entity', '').strip()
+            
+            # Find entity IDs
+            source_id = entity_map.get(source_name.lower())
+            target_id = entity_map.get(target_name.lower())
+            
+            # Only include if both entities exist
+            if source_id and target_id:
+                processed.append({
+                    'source_entity_name': source_name,
+                    'source_entity_id': source_id,
+                    'source_entity_type': rel.get('source_type', 'Entity'),
+                    'target_entity_name': target_name,
+                    'target_entity_id': target_id,
+                    'target_entity_type': rel.get('target_type', 'Entity'),
+                    'relationship_type': rel.get('relationship_type', 'RELATES_TO'),
+                    'context': rel.get('context', ''),
+                    'confidence': rel.get('confidence', 0.8)
+                })
+        
+        return processed
 
     def export_to_json(self, output_file: str):
         """Export to JSON"""
@@ -360,6 +399,7 @@ class RAGTranscriptParser:
         total_chunks = sum(len(t['chunks']) for t in transcripts)
         total_entities = len(self.entity_cache)
         total_links = sum(len(t['chunk_entity_links']) for t in transcripts)
+        total_relationships = sum(len(t.get('entity_relationships', [])) for t in transcripts)
 
         output = {
             'metadata': {
@@ -368,7 +408,8 @@ class RAGTranscriptParser:
                 'total_chunks': total_chunks,
                 'total_entities': total_entities,
                 'total_chunk_entity_links': total_links,
-                'extraction_method': 'RAG-Optimized (Chunks + Entities)',
+                'total_entity_relationships': total_relationships,
+                'extraction_method': 'RAG-Optimized (Chunks + Entities + Relationships)',
                 'model': self.extractor.model_name
             },
             'transcripts': transcripts,
@@ -388,6 +429,7 @@ class RAGTranscriptParser:
         print(f"  Avg chunks/transcript: {total_chunks/len(transcripts):.1f}")
         print(f"  Total entities: {total_entities}")
         print(f"  Chunk-entity links: {total_links}")
+        print(f"  Entity relationships: {total_relationships}")
         print("\n[OK] Ready for RAG-optimized Neo4j loading!")
 
 

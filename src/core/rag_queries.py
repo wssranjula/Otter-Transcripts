@@ -617,6 +617,143 @@ class RAGQueryHelper:
                 chunk['entities'] = [record['name'] for record in entities_result]
 
         return unique_chunks[:limit]
+    
+    def find_entity_relationships(self, entity_name: str, relationship_type: Optional[str] = None) -> List[Dict]:
+        """
+        Find all relationships for a specific entity
+        
+        Args:
+            entity_name: Name of the entity
+            relationship_type: Optional filter for specific relationship type
+            
+        Returns:
+            List of relationship dictionaries
+        """
+        with self.driver.session() as session:
+            if relationship_type:
+                result = session.run("""
+                    MATCH (e:Entity {name: $entity_name})-[r]->(related:Entity)
+                    WHERE type(r) = $relationship_type OR r.relationship_type = $relationship_type
+                    RETURN e.name as source,
+                           related.name as target,
+                           related.type as target_type,
+                           type(r) as rel_type,
+                           r.relationship_type as relationship_type,
+                           r.context as context,
+                           r.confidence as confidence
+                    ORDER BY r.confidence DESC
+                """, entity_name=entity_name, relationship_type=relationship_type)
+            else:
+                result = session.run("""
+                    MATCH (e:Entity {name: $entity_name})-[r]->(related:Entity)
+                    RETURN e.name as source,
+                           related.name as target,
+                           related.type as target_type,
+                           type(r) as rel_type,
+                           r.relationship_type as relationship_type,
+                           r.context as context,
+                           r.confidence as confidence
+                    ORDER BY r.confidence DESC
+                """, entity_name=entity_name)
+            
+            return [dict(record) for record in result]
+    
+    def find_related_entities(self, entity_name: str, relationship_type: str, limit: int = 10) -> List[Dict]:
+        """
+        Find entities connected via specific relationship type
+        
+        Args:
+            entity_name: Name of the source entity
+            relationship_type: Type of relationship (WORKS_FOR, OPERATES_IN, etc.)
+            limit: Max number of results
+            
+        Returns:
+            List of related entity dictionaries
+        """
+        with self.driver.session() as session:
+            result = session.run("""
+                MATCH (e:Entity {name: $entity_name})-[r]->(related:Entity)
+                WHERE type(r) = $relationship_type OR r.relationship_type = $relationship_type
+                RETURN related.name as name,
+                       related.type as type,
+                       r.context as context,
+                       r.confidence as confidence
+                ORDER BY r.confidence DESC
+                LIMIT $limit
+            """, entity_name=entity_name, relationship_type=relationship_type, limit=limit)
+            
+            return [dict(record) for record in result]
+    
+    def get_entity_network(self, entity_name: str, max_depth: int = 2, limit: int = 50) -> List[Dict]:
+        """
+        Get entity subgraph network
+        
+        Args:
+            entity_name: Name of the entity
+            max_depth: Maximum depth of relationships to traverse
+            limit: Max number of paths to return
+            
+        Returns:
+            List of network path dictionaries
+        """
+        with self.driver.session() as session:
+            result = session.run("""
+                MATCH path = (e:Entity {name: $entity_name})-[*1..$max_depth]-(related:Entity)
+                WHERE e <> related
+                RETURN DISTINCT related.name as entity_name,
+                       related.type as entity_type,
+                       length(path) as depth,
+                       [r in relationships(path) | type(r)] as path_types
+                ORDER BY depth, entity_name
+                LIMIT $limit
+            """, entity_name=entity_name, max_depth=max_depth, limit=limit)
+            
+            return [dict(record) for record in result]
+    
+    def find_organizational_structure(self, org_name: str) -> Dict:
+        """
+        Find organizational structure for an organization
+        
+        Args:
+            org_name: Name of the organization
+            
+        Returns:
+            Dictionary with organization structure information
+        """
+        with self.driver.session() as session:
+            # Find people who work for this org
+            people_result = session.run("""
+                MATCH (p:Entity:Person)-[r:WORKS_FOR|WORKS_WITH|REPRESENTS]->(o:Entity:Organization {name: $org_name})
+                RETURN p.name as name, p.role as role, r.context as context
+                ORDER BY p.name
+            """, org_name=org_name)
+            
+            people = [dict(record) for record in people_result]
+            
+            # Find countries where org operates
+            countries_result = session.run("""
+                MATCH (o:Entity:Organization {name: $org_name})-[r:OPERATES_IN|BASED_IN|ACTIVE_IN]->(c:Entity:Country)
+                RETURN c.name as country, r.context as context
+                ORDER BY c.name
+            """, org_name=org_name)
+            
+            countries = [dict(record) for record in countries_result]
+            
+            # Find partner organizations
+            partners_result = session.run("""
+                MATCH (o:Entity:Organization {name: $org_name})-[r:PARTNERS_WITH|COLLABORATES_WITH]->(p:Entity:Organization)
+                RETURN p.name as partner, r.context as context
+                ORDER BY p.name
+            """, org_name=org_name)
+            
+            partners = [dict(record) for record in partners_result]
+            
+            return {
+                'organization': org_name,
+                'people': people,
+                'countries': countries,
+                'partners': partners
+            }
 
 
 def main():

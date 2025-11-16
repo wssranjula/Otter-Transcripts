@@ -50,6 +50,17 @@ class ActionItemEntity(BaseModel):
     owner: Optional[str] = Field(None, description="Who is responsible")
 
 
+class EntityRelationship(BaseModel):
+    """Relationship between two entities"""
+    source_entity: str = Field(description="Name of first entity (person, organization, country, topic)")
+    source_type: str = Field(description="Type of source entity: Person, Organization, Country, or Topic")
+    target_entity: str = Field(description="Name of second entity")
+    target_type: str = Field(description="Type of target entity: Person, Organization, Country, or Topic")
+    relationship_type: str = Field(description="Type of relationship. Common types: WORKS_FOR, WORKS_WITH, REPRESENTS, CONSULTS_FOR (Person→Organization); COLLABORATES_WITH, MENTIONED_WITH, REPORTS_TO (Person→Person); OPERATES_IN, BASED_IN, ACTIVE_IN (Organization→Country); PARTNERS_WITH, COLLABORATES_WITH (Organization→Organization); FOCUSES_ON, RELATED_TO (Entity→Topic); RELATES_TO (generic)")
+    context: str = Field(description="Supporting text from transcript that shows this relationship")
+    confidence: float = Field(default=0.8, description="Confidence score 0-1. Higher for explicit relationships mentioned directly")
+
+
 class SimplifiedEntities(BaseModel):
     """Core business entities only"""
     people: List[PersonEntity] = Field(default_factory=list)
@@ -58,6 +69,7 @@ class SimplifiedEntities(BaseModel):
     topics: List[TopicEntity] = Field(default_factory=list)
     decisions: List[DecisionEntity] = Field(default_factory=list)
     action_items: List[ActionItemEntity] = Field(default_factory=list)
+    relationships: List[EntityRelationship] = Field(default_factory=list, description="Relationships between entities")
 
 
 # ============================================
@@ -123,6 +135,15 @@ Extract these entities (business context only):
 4. **Topics**: Strategic themes (NOT personal topics)
 5. **Decisions**: Business decisions made
 6. **Action Items**: Work tasks assigned
+7. **Entity Relationships**: Relationships between entities mentioned in the text. Examples:
+   - Person → Organization: "Tom works for TCCRI" → WORKS_FOR
+   - Person → Person: "Sue and Tom collaborated" → COLLABORATES_WITH
+   - Organization → Country: "TCCRI operates in Texas" → OPERATES_IN
+   - Organization → Organization: "Partnership between X and Y" → PARTNERS_WITH
+   - Entity → Topic: "Organization focuses on SRM" → FOCUSES_ON
+   
+   Extract relationships only when they are explicitly mentioned or clearly implied in the text.
+   Include the context text that shows the relationship.
 
 {format_instructions}
 
@@ -285,8 +306,112 @@ REMEMBER: Skip all personal/casual content. Focus on strategic business substanc
             'countries': [],
             'topics': [],
             'decisions': [],
-            'action_items': []
+            'action_items': [],
+            'relationships': []
         }
+    
+    def extract_relationships(self, transcript_text: str, meeting_info: dict, entities_data: dict) -> List[dict]:
+        """
+        Extract relationships between entities from transcript
+        
+        Args:
+            transcript_text: Full transcript text
+            meeting_info: Meeting metadata
+            entities_data: Previously extracted entities
+            
+        Returns:
+            List of relationship dictionaries
+        """
+        print(f"  Extracting relationships from: {meeting_info.get('title', 'Unknown')}")
+        
+        # Filter out casual content
+        filtered_text = self._filter_casual_content(transcript_text)
+        
+        # Split into chunks for relationship extraction
+        chunks = self._chunk_transcript(filtered_text, max_chars=12000)
+        print(f"    Processing {len(chunks)} chunk(s) for relationships...")
+        
+        all_relationships = []
+        
+        for i, chunk in enumerate(chunks, 1):
+            print(f"    Relationship chunk {i}/{len(chunks)}... ", end="", flush=True)
+            
+            try:
+                # Extract relationships from this chunk
+                parser = JsonOutputParser(pydantic_object=SimplifiedEntities)
+                
+                # Create a focused prompt for relationships
+                relationship_prompt = ChatPromptTemplate.from_messages([
+                    ("system", """You are an expert at identifying relationships between entities in business transcripts.
+                    
+Extract relationships between entities when they are explicitly mentioned or clearly implied.
+Focus on professional/business relationships only."""),
+                    ("user", """Extract entity relationships from this transcript chunk.
+
+Meeting: {meeting_title}
+Date: {meeting_date}
+
+Transcript Chunk:
+---
+{transcript_chunk}
+---
+
+Extract relationships between entities mentioned in the text. For each relationship:
+- Identify source and target entities (must be entities mentioned in the text)
+- Determine relationship type (WORKS_FOR, OPERATES_IN, COLLABORATES_WITH, etc.)
+- Include the context text that shows the relationship
+- Set confidence (0.8 for explicit, 0.6 for implied)
+
+{format_instructions}""")
+                ])
+                
+                relationship_chain = relationship_prompt | self.llm | parser
+                
+                result = relationship_chain.invoke({
+                    "meeting_title": meeting_info.get("title", "Unknown"),
+                    "meeting_date": meeting_info.get("date", "Unknown"),
+                    "transcript_chunk": chunk,
+                    "format_instructions": parser.get_format_instructions()
+                })
+                
+                # Extract relationships from result
+                if 'relationships' in result:
+                    all_relationships.extend(result['relationships'])
+                
+                print("[OK]")
+                
+            except Exception as e:
+                print(f"[WARN] Relationship extraction error: {e}")
+                continue
+        
+        # Deduplicate relationships
+        all_relationships = self._deduplicate_relationships(all_relationships)
+        
+        print(f"    [OK] Found {len(all_relationships)} relationships")
+        
+        return all_relationships
+    
+    def _deduplicate_relationships(self, relationships: List[dict]) -> List[dict]:
+        """Remove duplicate relationships, keeping highest confidence"""
+        if not relationships:
+            return []
+        
+        # Group by source, target, and relationship type
+        seen = {}
+        
+        for rel in relationships:
+            key = (
+                rel.get('source_entity', '').lower().strip(),
+                rel.get('target_entity', '').lower().strip(),
+                rel.get('relationship_type', '').upper().strip()
+            )
+            
+            confidence = rel.get('confidence', 0.5)
+            
+            if key not in seen or confidence > seen[key].get('confidence', 0):
+                seen[key] = rel
+        
+        return list(seen.values())
 
 
 # ============================================

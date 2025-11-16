@@ -228,6 +228,10 @@ Action {
 | `NEXT_CHUNK` | Chunk → Chunk | Expand context window |
 | `PART_OF` | Chunk → Meeting | Retrieve meeting metadata |
 | `RESULTED_IN` | Chunk → Decision/Action | Explain "why" with evidence |
+| `RELATES_TO` | Entity → Entity | Knowledge graph relationships |
+| `WORKS_FOR` | Person → Organization | Organizational structure |
+| `OPERATES_IN` | Organization → Country | Geographic operations |
+| `COLLABORATES_WITH` | Person → Person / Org → Org | Collaboration networks |
 
 ---
 
@@ -265,7 +269,35 @@ MATCH (c:Chunk)-[:RESULTED_IN]->(d)
 RETURN c.text as reasoning, c.speakers, d.rationale
 ```
 
-### 4. Topic Evolution
+### 4. Entity Relationships (NEW)
+
+Find relationships between entities:
+
+```cypher
+// Find who works for which organizations
+MATCH (p:Entity:Person)-[r:RELATES_TO]->(o:Entity:Organization)
+WHERE r.relationship_type = 'WORKS_FOR'
+RETURN p.name, o.name, r.context
+
+// Find organizations operating in Germany
+MATCH (o:Entity:Organization)-[r:RELATES_TO]->(c:Entity:Country {name: 'Germany'})
+WHERE r.relationship_type = 'OPERATES_IN'
+RETURN o.name, r.context
+
+// Find entity network (multi-hop connections)
+MATCH path = (e1:Entity {name: 'Tom Pravda'})-[*1..2]-(e2:Entity)
+RETURN e2.name, length(path) as depth, relationships(path) as path_rels
+
+// Find organizational structure
+MATCH (p:Entity:Person)-[r:WORKS_FOR|WORKS_WITH]->(o:Entity:Organization {name: 'TCCRI'})
+RETURN p.name, p.role, r.context
+
+// Find collaboration networks
+MATCH (p1:Entity:Person)-[r:COLLABORATES_WITH]->(p2:Entity:Person)
+RETURN p1.name, p2.name, r.context
+```
+
+### 5. Topic Evolution
 
 How has discussion evolved over time?
 
@@ -331,6 +363,35 @@ actions = rag.find_actions_by_owner("Craig Segall")
 # Get comprehensive entity context
 context = rag.get_entity_context("Sue Biniaz", sample_size=3)
 # Returns: entity info, mention stats, sample discussions
+```
+
+#### Entity Relationships (NEW)
+
+```python
+# Find all relationships for an entity
+relationships = rag.find_entity_relationships("Tom Pravda")
+# Returns: List of relationships with target entities, types, context
+
+# Find relationships of specific type
+works_for = rag.find_entity_relationships("Tom Pravda", relationship_type="WORKS_FOR")
+# Returns: Only WORKS_FOR relationships
+
+# Find entities connected via specific relationship
+colleagues = rag.find_related_entities("Tom Pravda", "COLLABORATES_WITH", limit=10)
+# Returns: People who collaborate with Tom
+
+# Get entity network (multi-hop connections)
+network = rag.get_entity_network("Tom Pravda", max_depth=2, limit=50)
+# Returns: All entities connected within 2 hops
+
+# Find organizational structure
+org_structure = rag.find_organizational_structure("TCCRI")
+# Returns: {
+#   'organization': 'TCCRI',
+#   'people': [{'name': 'Tom Pravda', 'role': '...', ...}],
+#   'countries': [{'country': 'Texas', ...}],
+#   'partners': [{'partner': '...', ...}]
+# }
 ```
 
 #### Temporal Analysis

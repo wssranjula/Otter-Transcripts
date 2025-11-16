@@ -21,6 +21,8 @@ config.json
 config/config.json
 config/gdrive_config.json
 gdrive_config.json
+# Prompt config can be version controlled (no secrets)
+# config/supervisor_prompt_config.json
 
 # State files
 config/gdrive_state.json

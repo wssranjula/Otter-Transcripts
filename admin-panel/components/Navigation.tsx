@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { MessageSquare, Users, LayoutDashboard, Leaf, Menu, X } from 'lucide-react';
+import { MessageSquare, Users, LayoutDashboard, Menu, X, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
+import Image from 'next/image';
 
 export function Navigation() {
   const pathname = usePathname();
@@ -14,6 +15,7 @@ export function Navigation() {
     { href: '/', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/chat', label: 'Chat with Sybil', icon: MessageSquare },
     { href: '/whitelist', label: 'Whitelist', icon: Users },
+    { href: '/prompt', label: 'Prompt Config', icon: Settings },
   ];
 
   return (
@@ -41,18 +43,25 @@ export function Navigation() {
       )}>
       {/* Logo/Header */}
       <div className="mb-6 lg:mb-8 mt-12 lg:mt-0">
-        <div className="flex items-center gap-2 lg:gap-3 mb-2">
-          <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl bg-gradient-to-br from-green-600 to-teal-600 flex items-center justify-center shadow-lg">
-            <Leaf className="h-6 w-6 lg:h-7 lg:w-7 text-white" />
+        <div className="flex items-center gap-2 lg:gap-3 mb-3">
+          <div className="relative w-12 h-12 lg:w-14 lg:h-14 shrink-0 bg-white dark:bg-gray-800 rounded-xl p-2 shadow-lg border-2 border-green-200 dark:border-green-800">
+            <Image
+              src="/logo.png"
+              alt="Climate Hub Logo"
+              fill
+              className="object-contain"
+              priority
+              unoptimized
+            />
           </div>
           <div>
-            <h1 className="text-xl lg:text-2xl font-bold bg-gradient-to-r from-green-700 to-teal-700 bg-clip-text text-transparent">
+            <h1 className="text-xl lg:text-2xl font-bold text-gray-900 dark:text-gray-100">
               Sybil Admin
             </h1>
-            <p className="text-xs lg:text-sm text-green-700 dark:text-green-400 font-medium">Climate Hub</p>
+            <p className="text-xs lg:text-sm text-green-700 dark:text-green-400 font-semibold">Climate Hub Portal</p>
           </div>
         </div>
-        <div className="h-1 bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500 rounded-full" />
+        <div className="h-1 bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500 rounded-full shadow-sm" />
       </div>
 
       {/* Navigation Links */}
@@ -90,13 +99,21 @@ export function Navigation() {
       </div>
 
       {/* Mission Statement */}
-      <div className="mt-6 lg:mt-8 p-3 lg:p-4 bg-white dark:bg-gray-900 rounded-xl border-2 border-green-200 dark:border-green-900 shadow-sm">
+      <div className="mt-6 lg:mt-8 p-4 bg-gradient-to-br from-green-50 to-teal-50 dark:from-green-950/30 dark:to-teal-950/30 rounded-xl border-2 border-green-200 dark:border-green-800 shadow-md">
         <div className="flex items-center gap-2 mb-2">
-          <Leaf className="h-4 w-4 text-green-600" />
-          <p className="text-xs font-semibold text-green-700 dark:text-green-400">Our Mission</p>
+          <div className="relative w-5 h-5 shrink-0 bg-white dark:bg-gray-800 rounded-lg p-0.5 border border-green-200 dark:border-green-700">
+            <Image
+              src="/icon.png"
+              alt="Climate Hub"
+              fill
+              className="object-contain"
+              unoptimized
+            />
+          </div>
+          <p className="text-xs font-bold text-green-800 dark:text-green-300">Our Mission</p>
         </div>
-        <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
-          Empowering climate action through intelligent knowledge management
+        <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed font-medium">
+          Empowering climate action through intelligent AI-powered knowledge management
         </p>
       </div>
 

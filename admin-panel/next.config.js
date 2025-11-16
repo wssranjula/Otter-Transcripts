@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  images: {
+    unoptimized: true, // Allow local images without optimization
+  },
   // Allow CORS for local development with FastAPI backend
   async rewrites() {
     return [

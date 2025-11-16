@@ -80,7 +80,13 @@ Supervisor Context Total: 4,500 tokens ✅ NO OVERFLOW!
 **Input**: Query request from supervisor
 **Output**: Concise summary (max 500 words) with key findings
 
-**Example**:
+**Capabilities**:
+- Standard content queries (meetings, chunks, entities)
+- **Entity relationship queries** (NEW): Find relationships between entities
+- Multi-hop network queries: Traverse entity connections
+- Organizational structure queries: Find who works for which organizations
+
+**Example - Standard Query**:
 ```
 Supervisor: "Query all July meetings about US strategy"
 Query Agent: 
@@ -89,6 +95,30 @@ Query Agent:
   3. Summarizes to 500 tokens:
      "Found 10 meetings. Main topics: federal engagement,
       state-level partnerships, IRA implementation..."
+```
+
+**Example - Relationship Query**:
+```
+Supervisor: "Who works for Organization X?"
+Query Agent:
+  1. Executes relationship query:
+     MATCH (p:Entity:Person)-[r:WORKS_FOR]->(o:Entity:Organization {name: 'X'})
+     RETURN p.name, r.context
+  2. Returns concise summary:
+     "Found 5 people: Tom Pravda (strategy lead), 
+      Sue Biniaz (policy director), ..."
+```
+
+**Example - Network Query**:
+```
+Supervisor: "How are Person A and Person B connected?"
+Query Agent:
+  1. Executes multi-hop query:
+     MATCH path = (e1:Entity {name: 'A'})-[*1..2]-(e2:Entity {name: 'B'})
+     RETURN path
+  2. Returns connection summary:
+     "Connected via: A WORKS_FOR Organization X, 
+      B also WORKS_FOR Organization X (colleagues)"
 ```
 
 #### 2. Analysis Agent (Data Analyst)
