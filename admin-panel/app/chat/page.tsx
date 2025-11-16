@@ -11,7 +11,7 @@ export default function ChatPage() {
             src="/logo.png"
             alt="Climate Hub Logo"
             fill
-            className="object-contain p-1"
+            className="object-contain"
             priority
             unoptimized
           />

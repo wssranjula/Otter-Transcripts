@@ -49,7 +49,7 @@ export function Navigation() {
               src="/logo.png"
               alt="Climate Hub Logo"
               fill
-              className="object-contain p-1"
+              className="object-contain"
               priority
               unoptimized
             />
@@ -106,7 +106,7 @@ export function Navigation() {
               src="/icon.png"
               alt="Climate Hub"
               fill
-              className="object-contain p-0.5"
+              className="object-contain"
               unoptimized
             />
           </div>

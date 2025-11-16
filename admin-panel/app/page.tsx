@@ -30,7 +30,7 @@ export default function DashboardPage() {
             src="/logo.png"
             alt="Climate Hub Logo"
             fill
-            className="object-contain p-2"
+            className="object-contain"
             priority
             unoptimized
           />
