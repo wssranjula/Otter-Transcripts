@@ -8,7 +8,7 @@ Set up HTTPS access to your Infomaniak VPS backend **without buying a domain**.
 **Result**: `https://random-name.trycloudflare.com` with automatic HTTPS
 
 ---
-
+ 
 ## Step-by-Step Setup
 
 ### Step 1: SSH to Your VPS
